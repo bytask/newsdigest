@@ -68,7 +68,7 @@ async function fetchOne(t) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(t.url, { signal: ctrl.signal, headers: { "User-Agent": "intel-digest/0.1 (+https://github.com/bytask/intel-digest)", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" } });
+    const res = await fetch(t.url, { signal: ctrl.signal, headers: { "User-Agent": "newsdigest/0.1 (+https://github.com/bytask/newsdigest)", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" } });
     if (!res.ok) return { ...t, ok: false, items: [], error: `HTTP ${res.status}` };
     const xml = await res.text();
     const { feedTitle, items } = parse(xml);

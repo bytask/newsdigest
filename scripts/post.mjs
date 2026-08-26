@@ -1,36 +1,39 @@
 #!/usr/bin/env node
-// intel-console REST API の薄いクライアント（依存ゼロ）。スキルから呼ぶ。
+// newsdigest コンソール REST API の薄いクライアント（依存ゼロ）。スキルから呼ぶ。
 //
 //   node scripts/post.mjs health                       GET  /api/health（認証不要）
 //   node scripts/post.mjs sources                      GET  /api/sources → stdout(JSON)
 //   node scripts/post.mjs sources:put <file.json>      PUT  /api/sources（全置換）
+//   node scripts/post.mjs policy                       GET  /api/policy → stdout(markdown)。未設定なら exit 3
+//   node scripts/post.mjs policy:put <file.md>         PUT  /api/policy
 //   node scripts/post.mjs digest <name> <file.md>      POST /api/digests {name, markdown}
 //   node scripts/post.mjs digest:get <name>            GET  /api/digests/<name> → stdout(markdown)
 //   node scripts/post.mjs digests                      GET  /api/digests → stdout(JSON)
 //   node scripts/post.mjs raw <file.json>              POST /api/raw（RawCollection）
 //   node scripts/post.mjs raw:get <date>               GET  /api/raw/<date>
 //
-// env: INTEL_API_URL, INTEL_API_KEY（.env.local / .env からも読む）
+// env: NEWSDIGEST_API_URL, NEWSDIGEST_API_KEY（.env.local / .env からも読む）
 import { readFileSync } from "node:fs";
 import { loadEnv, requireEnv } from "./env.mjs";
 
 const [cmd, a1, a2] = process.argv.slice(2);
 if (!cmd) {
-  console.error(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 13).join("\n"));
+  console.error(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 15).join("\n"));
   process.exit(1);
 }
 
 loadEnv();
-const base = (process.env.INTEL_API_URL || "").replace(/\/+$/, "");
+const base = (process.env.NEWSDIGEST_API_URL || "").replace(/\/+$/, "");
 
-async function call(method, p, body, { auth = true, text = false } = {}) {
-  if (!base) requireEnv("INTEL_API_URL");
-  const headers = { "Content-Type": "application/json" };
+async function call(method, p, body, { auth = true, text = false, raw = false } = {}) {
+  if (!base) requireEnv("NEWSDIGEST_API_URL");
+  const headers = { "Content-Type": raw ? "text/markdown; charset=utf-8" : "application/json" };
   if (auth) {
-    const [key] = requireEnv("INTEL_API_KEY");
+    const [key] = requireEnv("NEWSDIGEST_API_KEY");
     headers.Authorization = `Bearer ${key}`;
   }
-  const res = await fetch(base + p, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await fetch(base + p, { method, headers, body: body === undefined ? undefined : raw ? body : JSON.stringify(body) });
+  if (res.status === 204) return null;
   const out = text ? await res.text() : await res.text().then((t) => { try { return JSON.parse(t); } catch { return t; } });
   if (!res.ok) {
     console.error(`${method} ${p} → HTTP ${res.status}`, typeof out === "string" ? out.slice(0, 300) : JSON.stringify(out));
@@ -54,6 +57,17 @@ switch (cmd) {
     const doc = JSON.parse(readFileSync(a1, "utf8"));
     if (!doc?.sources) { console.error("invalid sources doc (need .sources)"); process.exit(1); }
     console.log(JSON.stringify(await call("PUT", "/api/sources", doc)));
+    break;
+  }
+  case "policy": {
+    const p = await call("GET", "/api/policy", undefined, { text: true });
+    if (p === null || !p.trim()) { console.error("policy not configured (set it with the newsdigest MCP set_digest_policy or `policy:put <file.md>`)"); process.exit(3); }
+    process.stdout.write(p.endsWith("\n") ? p : p + "\n");
+    break;
+  }
+  case "policy:put": {
+    if (!a1) { console.error("usage: policy:put <file.md>"); process.exit(1); }
+    console.log(JSON.stringify(await call("PUT", "/api/policy", readFileSync(a1, "utf8"), { raw: true })));
     break;
   }
   case "digests": console.log(JSON.stringify(await call("GET", "/api/digests"), null, 2)); break;

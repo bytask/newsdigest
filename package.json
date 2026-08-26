@@ -1,9 +1,9 @@
 {
-  "name": "intel-digest",
+  "name": "newsdigest",
   "version": "0.1.0",
   "private": true,
   "description": "Self-hosted daily intelligence digest: your sources, summarized by your own Claude Code routine, stored on your Cloudflare account.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {

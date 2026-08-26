@@ -1,6 +1,6 @@
 {
-  "_comment": "RemoteTrigger {action:'create', body:<this>} の body。{{...}} は intel-digest-routine スキルが埋める。cron は UTC（07:15 JST = 15 22 * * *）。",
-  "name": "intel-digest",
+  "_comment": "RemoteTrigger {action:'create', body:<this>} の body。{{...}} は newsdigest-routine スキルが埋める。cron は UTC（07:15 JST = 15 22 * * *）。",
+  "name": "newsdigest",
   "cron_expression": "{{CRON}}",
   "enabled": true,
   "job_config": {

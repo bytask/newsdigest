@@ -1,15 +1,16 @@
 # REST API
 
-ベース URL: `https://<your-worker>.workers.dev`。`/api/health` 以外は `Authorization: Bearer <INTEL_API_KEY>` が必要。すべて JSON（ダイジェスト本文の取得のみ `text/markdown`）。
+ベース URL: `https://<your-worker>.workers.dev`。`/api/health` 以外は `Authorization: Bearer <NEWSDIGEST_API_KEY>` が必要。すべて JSON（ダイジェスト本文と分析方針の取得のみ `text/markdown`）。
 
-薄いクライアント: `node scripts/post.mjs <cmd>`（`.env.local` / 環境変数から URL とキーを読む）。
+薄いクライアント: `node scripts/post.mjs <cmd>`（`.env.local` / 環境変数から URL とキーを読む）。対話的な操作は MCP（[MCP.md](MCP.md)）の方が楽。
 
 ## ヘルスチェック
 
 `GET /api/health` — 認証不要
 
 ```json
-{ "ok": true, "db": "ok", "digests": 12, "api_key_configured": true, "line_webhook_configured": false }
+{ "ok": true, "db": "ok", "digests": 12, "sources_active": 8, "policy_configured": true,
+  "api_key_configured": true, "line_webhook_configured": false, "mcp": "/mcp" }
 ```
 
 ## ソースマスタ
@@ -20,22 +21,21 @@
 {
   "version": 1,
   "sources": {
-    "x_accounts": [{ "handle": "AnthropicAI", "note": "…", "added": "2026-08-26", "status": "active" }],
+    "x_accounts": [{ "handle": "…", "note": "…", "added": "2026-01-01", "status": "active" }],
     "x_trends":   [{ "query": "…", "note": "…", "added": "…", "status": "active" }],
-    "rss":        [{ "url": "https://…", "title": "Hacker News", "category": "tech", "note": "…", "added": "…", "status": "active" }],
+    "rss":        [{ "url": "https://…", "title": "…", "category": "…", "note": "…", "added": "…", "status": "active" }],
     "releases":   [{ "repo": "owner/name", "url": "https://github.com/owner/name/releases.atom", "note": "…", "added": "…", "status": "active" }]
   },
   "review": { "cadence": "monthly", "last_reviewed": null }
 }
 ```
 
-`PUT /api/sources` — 同じ形状で **全置換**（部分更新はない。GET → 編集 → PUT）。`review.last_reviewed` を含めると `meta` も更新される。
+`PUT /api/sources` — 同じ形状で **全置換**（部分更新は MCP の `add_source` / `update_source` / `remove_source` を使う）。`review.last_reviewed` を含めると `meta` も更新される。
 
-```bash
-node scripts/post.mjs sources > sources.json
-# 編集
-node scripts/post.mjs sources:put sources.json
-```
+## 分析方針
+
+`GET /api/policy` — Markdown（`text/markdown`）。未設定なら `204`
+`PUT /api/policy` — `text/markdown` ボディ、または `{ "markdown": "…" }`。20 文字未満は 400
 
 ## ダイジェスト
 
@@ -66,12 +66,16 @@ node scripts/post.mjs sources:put sources.json
 {
   "date": "2026-08-26",
   "collected_at": "2026-08-26T07:16:00+09:00",
-  "items": [{ "source": "Hacker News", "kind": "rss", "title": "…", "url": "https://…", "published": "…", "note": "…" }],
+  "items": [{ "source": "…", "kind": "rss", "title": "…", "url": "https://…", "published": "…", "note": "…" }],
   "failures": [{ "source": "…", "kind": "x_trend", "reason": "xAI API returned 429" }]
 }
 ```
 
 `kind`: `rss` | `x_account` | `x_trend` | `release`
+
+## MCP
+
+`POST /mcp`（Bearer）/ `POST /mcp/<key>`（パストークン）— [MCP.md](MCP.md)
 
 ## 固定 URL（UI）
 
@@ -81,13 +85,13 @@ node scripts/post.mjs sources:put sources.json
 
 ## LINE Webhook（任意）
 
-`POST /api/line/webhook` — LINE Messaging API の Webhook。`X-Line-Signature` を `LINE_CHANNEL_SECRET` で検証。postback `topic:<date>:<n>` を受けると、その日のダイジェストの `### n. …` セクションをトークに返信する。通知でトピック一覧の Flex カード（各行 postback）を送る運用と組み合わせる（`docs/NOTIFICATIONS.md`）。
+`POST /api/line/webhook` — LINE Messaging API の Webhook。`X-Line-Signature` を `LINE_CHANNEL_SECRET` で検証。postback `topic:<date>:<n>` を受けると、その日のダイジェストの `### n. …` セクションをトークに返信する（[NOTIFICATIONS.md](NOTIFICATIONS.md)）。
 
 ## エラー
 
 | HTTP | 意味 |
 |---|---|
 | 401 | Bearer 不一致 |
-| 400 | body 不正（`name`/`markdown` 欠落、`date`/`items` 欠落、`sources` 欠落） |
+| 400 | body 不正 |
 | 404 | 該当なし |
-| 503 | `INTEL_API_KEY` 未設定（secret 未登録） |
+| 503 | `NEWSDIGEST_API_KEY` 未設定（secret 未登録） |

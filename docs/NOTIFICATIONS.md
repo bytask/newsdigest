@@ -40,7 +40,7 @@
 ## 動作確認
 
 ```bash
-NOTIFY_DRY_RUN=1 bash scripts/notify.sh "📡 Intel Digest 2026-08-26 …"   # 送らずに payload 表示
+NOTIFY_DRY_RUN=1 bash scripts/notify.sh "📡 NewsDigest 2026-08-26 …"   # 送らずに payload 表示
 ```
 
 `test` / `テスト` / `ping` などの本文はスクリプトが拒否する（動作確認のつもりの本番配信を防ぐ）。
@@ -60,8 +60,8 @@ curl -s -X POST https://api.line.me/v2/bot/message/broadcast -H "Authorization: 
 ```
 
 ```json
-{"messages":[{"type":"flex","altText":"📡 Intel Digest 2026-08-26","contents":{"type":"bubble",
- "header":{"type":"box","layout":"vertical","contents":[{"type":"text","text":"📡 Intel Digest 2026-08-26","weight":"bold","size":"md"}]},
+{"messages":[{"type":"flex","altText":"📡 NewsDigest 2026-08-26","contents":{"type":"bubble",
+ "header":{"type":"box","layout":"vertical","contents":[{"type":"text","text":"📡 NewsDigest 2026-08-26","weight":"bold","size":"md"}]},
  "body":{"type":"box","layout":"vertical","spacing":"sm","contents":[
    {"type":"box","layout":"horizontal","action":{"type":"postback","data":"topic:2026-08-26:1"},"contents":[{"type":"text","text":"1. トピック名","size":"sm","wrap":true,"flex":5},{"type":"text","text":"高","size":"xs","color":"#DC2626","align":"end","flex":1}]}
  ]},

@@ -83,8 +83,8 @@ export default async function SourcesPage() {
       ))}
 
       <p className="group-footer">
-        このページは読み取り専用です。ソースの追加・一時停止・削除は Bearer 認証付き API
-        （PUT /api/sources）または月次棚卸し（intel-sources-review）から行います。
+        このページは読み取り専用です。ソースの追加・一時停止・削除は内蔵 MCP（/mcp）経由で Claude Code / claude.ai に頼むか、
+        Bearer 認証付き API（PUT /api/sources）で行います。
       </p>
     </>
   );

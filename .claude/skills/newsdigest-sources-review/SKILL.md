@@ -1,15 +1,15 @@
 ---
-name: intel-sources-review
-description: intel-digest のソースマスタを月次で棚卸しするスキル。直近1ヶ月のダイジェスト実績からソース別の寄与を集計し、pause / 入替候補を提案してコンソールへ reviews/YYYY-MM として登録する。マスタの書き換えは行わず提案のみ。「ソース棚卸し」「ソースレビュー」で起動。
+name: newsdigest-sources-review
+description: NewsDigest のソースマスタを月次で棚卸しするスキル。直近1ヶ月のダイジェスト実績からソース別の寄与を集計し、pause / 入替候補を提案してコンソールへ reviews/YYYY-MM として登録する。マスタの書き換えは行わず提案のみ。「ソース棚卸し」「ソースレビュー」で起動。
 ---
 
-# Intel Sources Review — 月次ソース棚卸し
+# NewsDigest — 月次ソース棚卸し
 
-ソースマスタを月次でレビューし、低寄与ソースの pause と新規ソースの追加を **提案** する。マスタの書き換えは行わない（適用は利用者が `intel-digest` スキルのソース編集手順で行う）。
+ソースマスタを月次でレビューし、低寄与ソースの pause と新規ソースの追加を **提案** する。マスタの書き換えは行わない（適用は利用者が MCP または `newsdigest` スキルのソース編集手順で行う）。
 
 ## 前提
 
-- `INTEL_API_URL` / `INTEL_API_KEY`（`intel-digest` と同じ）
+- `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY`（`newsdigest` と同じ）
 - 直近のダイジェストがコンソールに 1 件以上あること（0 件なら実績集計をスキップし追加提案のみ）
 
 ## 手順
@@ -19,7 +19,8 @@ description: intel-digest のソースマスタを月次で棚卸しするスキ
 ```bash
 mkdir -p .work
 node scripts/post.mjs sources > .work/sources.json
-node scripts/post.mjs digests > .work/digests.json      # 一覧（name, kind, uploadedAt）
+node scripts/post.mjs policy  > .work/policy.md || true     # 関心領域の把握に使う
+node scripts/post.mjs digests > .work/digests.json          # 一覧（name, kind, uploadedAt）
 ```
 
 前月分＋当月分の日次ダイジェスト（`kind: digest`、名前が `YYYY-MM-DD`）を `node scripts/post.mjs digest:get <name>` で全て読み、ソースごとに集計する:
@@ -38,7 +39,7 @@ node scripts/post.mjs digests > .work/digests.json      # 一覧（name, kind, u
 
 ### Step 3: 追加候補
 
-ソースマスタの `note` / `category` から利用者の関心領域を読み取り、WebSearch で各領域の有力な X アカウント・RSS フィードを探して 3〜5 件提案する（RSS は `node scripts/fetch-rss.mjs <url>` で実在と取得可否を確認する）。
+分析方針（`.work/policy.md`）とソースマスタの `note` / `category` から利用者の関心領域を読み取り、WebSearch で各領域の有力な X アカウント・RSS フィード・GitHub リポジトリを探して 3〜5 件提案する（RSS は `node scripts/fetch-rss.mjs <url>` で実在と取得可否を確認する）。方針が未設定なら、既存ソースの傾向だけから提案し、方針の設定を促す一文を添える。
 
 ### Step 4: 保存
 
@@ -68,11 +69,11 @@ digests_analyzed: N
 - ソース名 — 理由
 
 ### 追加候補
-- ソース名（URL / handle）— 理由・関連領域
+- ソース名（URL / handle / owner-name）— 理由・関連領域
 
 ## 適用方法
 
-Claude Code に「ソース ○○ を pause して」「△△ を追加して」と頼む（`intel-digest` スキルが PUT /api/sources で反映する）。
+Claude Code に「ソース ○○ を pause して」「△△ を追加して」と頼む（MCP `update_source` / `add_source`、または `newsdigest` スキルが PUT /api/sources で反映する）。
 ```
 
 ### Step 5: 通知（任意）
@@ -82,4 +83,4 @@ pause 候補と追加候補のサマリを `bash scripts/notify.sh "<文面>"` �
 ## 注意
 
 - このスキルはソースマスタを書き換えない
-- レポートの言語は `DIGEST_LANG`（既定: 日本語）
+- レポートの言語は分析方針 → `DIGEST_LANG`（既定: 日本語）

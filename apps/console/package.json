@@ -1,15 +1,16 @@
 {
-  "name": "intel-console",
+  "name": "newsdigest",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "next dev -p 3150",
     "build": "next build",
     "start": "next start -p 3150",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "db:schema:remote": "wrangler d1 execute intel-console --remote --file=./schema.sql",
-    "db:schema:local": "wrangler d1 execute intel-console --local --file=./schema.sql",
+    "db:schema:remote": "wrangler d1 execute newsdigest --remote --file=./schema.sql",
+    "db:schema:local": "wrangler d1 execute newsdigest --local --file=./schema.sql",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -2,6 +2,9 @@
 // テーブル: sources / digests / raw_items / raw_failures / meta（スキーマは schema.sql）
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
+export type SourceKind = "x_account" | "x_trend" | "rss" | "release";
+export const SOURCE_KINDS: SourceKind[] = ["x_account", "x_trend", "rss", "release"];
+
 export interface XAccount { handle: string; note?: string; added?: string; status: string }
 export interface XTrend { query: string; note?: string; added?: string; status: string }
 export interface RssSource { url: string; title: string; category?: string; note?: string; added?: string; status: string }
@@ -19,7 +22,7 @@ function db(): D1Database {
 }
 
 interface SourceRowDb {
-  kind: "x_account" | "x_trend" | "rss" | "release";
+  kind: SourceKind;
   value: string;
   title: string | null;
   category: string | null;
@@ -27,6 +30,8 @@ interface SourceRowDb {
   added: string | null;
   status: string;
 }
+
+const today = () => new Date().toISOString().slice(0, 10);
 
 // ── ソースマスタ（API互換のため SourcesDoc 形状で入出力する） ──
 
@@ -56,26 +61,91 @@ export async function putSources(doc: SourcesDoc): Promise<void> {
   const ins = db().prepare(
     "INSERT INTO sources (kind,value,title,category,note,added,status) VALUES (?1,?2,?3,?4,?5,?6,?7)"
   );
-  for (const a of doc.sources.x_accounts)
-    stmts.push(ins.bind("x_account", a.handle, null, null, a.note ?? null, a.added ?? null, a.status));
-  for (const t of doc.sources.x_trends)
-    stmts.push(ins.bind("x_trend", t.query, null, null, t.note ?? null, t.added ?? null, t.status));
-  for (const r of doc.sources.rss)
-    stmts.push(ins.bind("rss", r.url, r.title, r.category ?? null, r.note ?? null, r.added ?? null, r.status));
+  for (const a of doc.sources.x_accounts ?? [])
+    stmts.push(ins.bind("x_account", a.handle, null, null, a.note ?? null, a.added ?? null, a.status ?? "active"));
+  for (const t of doc.sources.x_trends ?? [])
+    stmts.push(ins.bind("x_trend", t.query, null, null, t.note ?? null, t.added ?? null, t.status ?? "active"));
+  for (const r of doc.sources.rss ?? [])
+    stmts.push(ins.bind("rss", r.url, r.title, r.category ?? null, r.note ?? null, r.added ?? null, r.status ?? "active"));
   for (const r of doc.sources.releases ?? [])
-    stmts.push(ins.bind("release", r.url, r.repo, null, r.note ?? null, r.added ?? null, r.status));
-  if (doc.review.last_reviewed)
+    stmts.push(ins.bind("release", r.url, r.repo, null, r.note ?? null, r.added ?? null, r.status ?? "active"));
+  if (doc.review?.last_reviewed)
     stmts.push(db().prepare("UPDATE meta SET value = ?1 WHERE key = 'review_last_reviewed'").bind(doc.review.last_reviewed));
   await db().batch(stmts);
+}
+
+// ── ソースの個別操作（MCP / 対話用） ──
+
+export interface SourceInput {
+  kind: SourceKind;
+  value: string;        // x_account: handle（@なし） / x_trend: query / rss: url / release: "owner/name" または releases.atom URL
+  title?: string;       // rss: 表示名
+  category?: string;
+  note?: string;
+  status?: "active" | "paused";
+}
+
+// 入力を正規化して (value, title) に落とす。release は repo 指定を atom URL に変換する
+export function normalizeSource(s: SourceInput): { kind: SourceKind; value: string; title: string | null } {
+  if (!SOURCE_KINDS.includes(s.kind)) throw new Error(`invalid kind: ${s.kind}`);
+  let value = (s.value ?? "").trim();
+  if (!value) throw new Error("value is required");
+  if (s.kind === "x_account") return { kind: s.kind, value: value.replace(/^@/, "").replace(/^https?:\/\/(x|twitter)\.com\//, "").split(/[/?]/)[0], title: null };
+  if (s.kind === "x_trend") return { kind: s.kind, value, title: null };
+  if (s.kind === "rss") {
+    if (!/^https?:\/\//.test(value)) throw new Error("rss value must be a URL");
+    return { kind: s.kind, value, title: (s.title ?? "").trim() || value };
+  }
+  // release
+  const m = value.match(/^(?:https?:\/\/github\.com\/)?([\w.-]+\/[\w.-]+?)(?:\/releases(?:\.atom)?)?\/?$/);
+  if (!m) throw new Error('release value must be "owner/name" or a GitHub releases URL');
+  return { kind: s.kind, value: `https://github.com/${m[1]}/releases.atom`, title: m[1] };
+}
+
+export async function addSource(s: SourceInput): Promise<{ kind: SourceKind; value: string; title: string | null; created: boolean }> {
+  const n = normalizeSource(s);
+  const exists = await db().prepare("SELECT id FROM sources WHERE kind = ?1 AND value = ?2").bind(n.kind, n.value).first();
+  if (exists) {
+    await db().prepare("UPDATE sources SET title = COALESCE(?3, title), category = COALESCE(?4, category), note = COALESCE(?5, note), status = COALESCE(?6, status) WHERE kind = ?1 AND value = ?2")
+      .bind(n.kind, n.value, n.title, s.category ?? null, s.note ?? null, s.status ?? null).run();
+    return { ...n, created: false };
+  }
+  await db().prepare("INSERT INTO sources (kind,value,title,category,note,added,status) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+    .bind(n.kind, n.value, n.title, s.category ?? null, s.note ?? null, today(), s.status ?? "active").run();
+  return { ...n, created: true };
+}
+
+export async function updateSource(kind: SourceKind, value: string, patch: { status?: "active" | "paused"; note?: string; title?: string; category?: string }): Promise<boolean> {
+  const n = normalizeSource({ kind, value });
+  const r = await db().prepare("UPDATE sources SET status = COALESCE(?3, status), note = COALESCE(?4, note), title = COALESCE(?5, title), category = COALESCE(?6, category) WHERE kind = ?1 AND value = ?2")
+    .bind(n.kind, n.value, patch.status ?? null, patch.note ?? null, patch.title ?? null, patch.category ?? null).run();
+  return (r.meta.changes ?? 0) > 0;
+}
+
+export async function removeSource(kind: SourceKind, value: string): Promise<boolean> {
+  const n = normalizeSource({ kind, value });
+  const r = await db().prepare("DELETE FROM sources WHERE kind = ?1 AND value = ?2").bind(n.kind, n.value).run();
+  return (r.meta.changes ?? 0) > 0;
+}
+
+// ── 分析方針（ダイジェストの作り方。利用者が設定する。空ならルーティンは実行しない） ──
+
+export async function getPolicy(): Promise<string> {
+  const row = await db().prepare("SELECT value FROM meta WHERE key = 'digest_policy'").first<{ value: string }>();
+  return row?.value ?? "";
+}
+
+export async function setPolicy(markdown: string): Promise<void> {
+  await db().prepare("INSERT INTO meta (key, value) VALUES ('digest_policy', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1").bind(markdown).run();
 }
 
 // ── ダイジェスト ──
 
 export interface DigestMeta { name: string; kind: "digest" | "review"; uploadedAt: string; size: number }
 
-export async function listDigests(): Promise<DigestMeta[]> {
+export async function listDigests(limit?: number): Promise<DigestMeta[]> {
   const { results } = await db()
-    .prepare("SELECT name, kind, updated_at, length(markdown) AS size FROM digests ORDER BY replace(name,'reviews/','') DESC")
+    .prepare(`SELECT name, kind, updated_at, length(markdown) AS size FROM digests ORDER BY replace(name,'reviews/','') DESC${limit ? ` LIMIT ${Math.max(1, Math.min(500, Math.floor(limit)))}` : ""}`)
     .all<{ name: string; kind: "digest" | "review"; updated_at: string; size: number }>();
   return results.map((r) => ({ name: r.name, kind: r.kind, uploadedAt: r.updated_at, size: r.size }));
 }
@@ -83,6 +153,14 @@ export async function listDigests(): Promise<DigestMeta[]> {
 export async function getDigest(name: string): Promise<string | null> {
   const row = await db().prepare("SELECT markdown FROM digests WHERE name = ?1").bind(name).first<{ markdown: string }>();
   return row?.markdown ?? null;
+}
+
+export async function getLatestDigestName(prefix = ""): Promise<string | null> {
+  const all = await listDigests();
+  const hit = all
+    .filter((d) => (prefix ? d.name.startsWith(`${prefix}/`) : !d.name.includes("/")))
+    .sort((a, b) => b.name.localeCompare(a.name))[0];
+  return hit?.name ?? null;
 }
 
 export async function putDigest(name: string, markdown: string): Promise<void> {
@@ -122,9 +200,13 @@ export async function listRaw(): Promise<{ date: string; count: number }[]> {
   return results;
 }
 
-export async function getRaw(date: string): Promise<RawCollection | null> {
+export async function getRaw(date: string, filter?: { kind?: string; source?: string; limit?: number }): Promise<RawCollection | null> {
+  const where = ["date = ?1"]; const binds: unknown[] = [date];
+  if (filter?.kind) { binds.push(filter.kind); where.push(`kind = ?${binds.length}`); }
+  if (filter?.source) { binds.push(`%${filter.source}%`); where.push(`source LIKE ?${binds.length}`); }
+  const lim = filter?.limit ? ` LIMIT ${Math.max(1, Math.min(2000, Math.floor(filter.limit)))}` : "";
   const [items, failures] = await Promise.all([
-    db().prepare("SELECT source, kind, title, url, published, note FROM raw_items WHERE date = ?1 ORDER BY id").bind(date).all<RawItem>(),
+    db().prepare(`SELECT source, kind, title, url, published, note FROM raw_items WHERE ${where.join(" AND ")} ORDER BY id${lim}`).bind(...binds).all<RawItem>(),
     db().prepare("SELECT source, kind, reason FROM raw_failures WHERE date = ?1 ORDER BY id").bind(date).all<{ source: string; kind: string; reason: string }>(),
   ]);
   if (items.results.length === 0 && failures.results.length === 0) return null;

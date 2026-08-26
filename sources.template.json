@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "sources": { "x_accounts": [], "x_trends": [], "rss": [], "releases": [] },
+  "review": { "cadence": "monthly", "last_reviewed": null }
+}

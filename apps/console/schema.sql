@@ -1,4 +1,4 @@
--- intel-console D1 schema
+-- newsdigest D1 schema
 -- 適用: npm run db:schema:remote（本番） / npm run db:schema:local（wrangler dev 用）
 -- 冪等（IF NOT EXISTS）なので何度流してもよい。
 

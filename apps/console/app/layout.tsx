@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <SideNav />
             <div className="sidebar-foot">
-              <div>INTEL DIGEST</div>
+              <div>NEWSDIGEST</div>
               <div>{SCHEDULE_LABEL}</div>
             </div>
           </aside>

@@ -5,5 +5,7 @@ node_modules/
 .DS_Store
 # ローカル手動実行時の作業ファイル
 .work/
-# 自分のソースマスタのローカルミラー（sources.example.json は追跡する）
+# 自分のソースマスタのローカルミラー（sources.template.json は追跡する）
 sources.json
+# MCP 登録（キーを含む）
+.mcp.json

@@ -6,21 +6,21 @@
 |---|---|
 | ダイジェストの言語 | 環境変数 `DIGEST_LANG=ja|en` |
 | 「昨日〜今日」の基準 TZ | 環境変数 `DIGEST_TZ`（既定 Asia/Tokyo） |
-| 実行時刻 | ルーティンの cron（UTC）。`/intel-digest-routine` で変更 |
+| 実行時刻 | ルーティンの cron（UTC）。`/newsdigest-routine` で変更 |
 | 画面のスケジュール表記 | `apps/console/wrangler.jsonc` の `vars.SCHEDULE_LABEL` |
 
 ## ダイジェストの中身
 
-`.claude/skills/intel-digest/SKILL.md` を編集して push するだけ（ルーティンは毎回 checkout する）。よくある変更:
+観点・トピック数・言語・除外ルールは **分析方針**（コンソールに保存、MCP `set_digest_policy`）で変える。スキルを触る必要はない（[SOURCES-AND-POLICY.md](SOURCES-AND-POLICY.md)）。
 
-- トピック数（Step 3 の「5〜10」）
-- コメントの観点（「業界へのインパクト」を「自分の事業への示唆」に変える、など。ただし通知先が共有チャネルなら固有情報を書かない前提は維持）
+手順そのもの（収集ウィンドウ・図の種類・出力フォーマット）を変えたいときは `.claude/skills/newsdigest/SKILL.md` を編集して push する（ルーティンは毎回 checkout する）。よくある変更:
+
 - 図解の種類（`mindmap` → `timeline` / `flowchart`）
 - 収集ウィンドウ（`--hours 24` → 週次運用なら `168`）
 
 **変えないこと**: トピック見出しの形式 `### N. タイトル 【重要度: 高】`（LINE Webhook と棚卸しの集計が依存）。
 
-プロンプト本文 `routine/intel-digest.prompt.md` を変えた場合だけ、ルーティン側の更新（`/intel-digest-routine` → update）が必要。
+プロンプト本文 `routine/newsdigest.prompt.md` を変えた場合だけ、ルーティン側の更新（`/newsdigest-routine` → update）が必要。
 
 ## ソース種別の追加
 
@@ -32,7 +32,7 @@
 
 ```jsonc
 "vars": {
-  "APP_NAME": "My Intel",
+  "APP_NAME": "My Digest",
   "APP_TAGLINE": "…",
   "SCHEDULE_LABEL": "収集 毎朝 8:00",
   "LINE_ADD_URL": "https://line.me/R/ti/p/@xxxx"   // 任意
@@ -52,10 +52,10 @@
 
 スキルは環境変数さえあればどこでも動く:
 
-- **ローカル cron**: `claude -p "$(cat routine/intel-digest.prompt.md)" --allowedTools Bash,Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch`
+- **ローカル cron**: `claude -p "$(cat routine/newsdigest.prompt.md)" --allowedTools Bash,Read,Write,Edit,Glob,Grep,Skill,WebFetch,WebSearch`
 - **自前 VPS の headless Claude Code**: 同上。Piper ではこの形で運用している
-- **GitHub Actions**: Claude Code Action で同じプロンプトを実行（`INTEL_*` を Secrets に）
+- **GitHub Actions**: Claude Code Action で同じプロンプトを実行（`NEWSDIGEST_*` を Secrets に）
 
 ## Piper 本番との差分
 
-Piper 側の intel-console（運用インスタンス）とこのパッケージの `apps/console` は同じコードベースだが、パッケージ側は表示名・スケジュール表記を `vars` に外出しし、`/api/health` を追加、LINE Webhook の secrets 名を `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` に汎用化している。
+Piper 側の newsdigest（運用インスタンス）とこのパッケージの `apps/console` は同じコードベースだが、パッケージ側は表示名・スケジュール表記を `vars` に外出しし、`/api/health` を追加、LINE Webhook の secrets 名を `LINE_CHANNEL_ID` / `LINE_CHANNEL_SECRET` に汎用化している。

@@ -83,7 +83,7 @@ export function MobileChrome({ appName, scheduleLabel }: { appName: string; sche
           <NavItems pathname={pathname} />
         </div>
         <div className="drawer-foot">
-          <div>INTEL DIGEST</div>
+          <div>NEWSDIGEST</div>
           <div>{scheduleLabel}</div>
         </div>
       </nav>

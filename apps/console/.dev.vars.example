@@ -1,6 +1,6 @@
 # ローカル開発（wrangler / opennextjs preview）用。コピーして .dev.vars にする（gitignore 済み）
-INTEL_API_KEY=dev-key
-APP_NAME=Intel Digest (dev)
+NEWSDIGEST_API_KEY=dev-key
+APP_NAME=NewsDigest (dev)
 # LINE_CHANNEL_ID=
 # LINE_CHANNEL_SECRET=
 # LINE_ADD_URL=https://line.me/R/ti/p/@xxxxxxx

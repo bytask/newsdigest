@@ -1,108 +1,131 @@
 # セットアップガイド
 
-所要時間の目安: 15 分（Cloudflare 5 分・ルーティン登録 5 分・初回実行の確認 5 分）。
+推奨は **Claude Code に任せる**（README のクイックスタート: リポジトリで `claude` → 「セットアップして」→ `/newsdigest-setup`）。このページは、その裏で何が起きているかと、人間が手で同じことをする手順。
 
 ## 0. 必要なもの
 
 | 項目 | 用途 | 備考 |
 |---|---|---|
-| Cloudflare アカウント | コンソール（Workers + D1）のホスト | 無料枠で十分（Workers 10 万リクエスト/日、D1 5GB） |
-| GitHub アカウント | ルーティンがこのリポジトリをチェックアウトする | private でよい |
-| Claude Pro / Max / Team | Claude Code Web版のルーティン | 日次 1 回・5〜15 分の実行 |
+| Cloudflare アカウント | コンソール（Workers + D1）のホスト | 無料枠で十分 |
+| GitHub アカウント | ルーティンが **あなたの fork** をチェックアウトする | private でよい |
+| Claude Pro / Max / Team | Claude Code（ローカル）と Web版ルーティン | 日次 1 回・5〜15 分の実行 |
 | Node.js 20+ | セットアップ CLI・ローカル実行 | `node -v` |
-| xAI API キー（任意） | X アカウント / X トレンドの収集 | https://console.x.ai — 無ければ RSS / リリースのみで動く |
+| xAI API キー（任意） | X アカウント / X トレンドの収集 | https://console.x.ai — 無ければ RSS / リリースのみ |
 
 ## 1. リポジトリを自分の GitHub へ
 
-GitHub 上で **Fork**（または「Use this template」）してから clone する。ルーティンは *あなたの* GitHub 上のリポジトリを読むので、元リポジトリを直接使うことはできない。
+GitHub 上で **Fork**（または「Use this template」）してから clone。ルーティンは *あなたの* リポジトリを読むので、元リポジトリは使えない。
 
 ```bash
-git clone https://github.com/<you>/intel-digest.git
-cd intel-digest
+git clone https://github.com/<you>/newsdigest.git
+cd newsdigest
 ```
 
 ## 2. コンソールをデプロイ
 
 ```bash
-npm run setup
+npm run setup                       # 対話
+npm run setup -- --yes --name mydigest --app-name "My Digest" --json   # 非対話（Claude Code はこちら）
 ```
 
-対話で以下を進める（何度実行しても安全。作成済みのものはスキップ）:
+やること（冪等。何度実行しても安全）:
 
 1. **Cloudflare 認証** — 未認証ならブラウザが開く（`wrangler login`）
 2. **Worker 名 / 表示名** — Worker 名が URL になる（`https://<name>.<your-subdomain>.workers.dev`）
-3. **D1** — `wrangler d1 create` → `schema.sql` 適用。`apps/console/wrangler.jsonc` に database_id が書き込まれる（**この変更は commit してよい**。秘密ではない）
-4. **API キー** — ランダム生成して Worker secret `INTEL_API_KEY` に登録
+3. **D1** — `wrangler d1 create` → `schema.sql`。`apps/console/wrangler.jsonc` に database_id が書き込まれる（秘密ではないので commit してよい）
+4. **API キー** — ランダム生成して Worker secret `NEWSDIGEST_API_KEY` に登録
 5. **デプロイ** — `opennextjs-cloudflare build && deploy`
-6. **初期ソース** — `sources.json`（あれば）か `sources.example.json` を `PUT /api/sources` で投入
-7. **ヘルスチェック** — `GET /api/health` が `ok: true` なら完了。`.env.local` に `INTEL_API_URL` / `INTEL_API_KEY` が保存される（gitignore 済み）
+6. **ヘルスチェック** — `GET /api/health` が `ok: true`。`.env.local` に `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` を保存（gitignore 済み）。最後に MCP 登録コマンドと次の手順を表示
 
-手動でやりたい場合は `apps/console/` で `npx wrangler d1 create …` → `wrangler.jsonc` 編集 → `npm run db:schema:remote` → `npx wrangler secret put INTEL_API_KEY` → `npm run deploy`。
+ソースと分析方針は **投入しない**（空のまま）。`--seed sources.json` で一括投入もできる。
+
+手動でやる場合は `apps/console/` で `npx wrangler d1 create <name>` → `wrangler.jsonc` 編集 → `npm run db:schema:remote` → `npx wrangler secret put NEWSDIGEST_API_KEY` → `npm run deploy`。
 
 ### 動作確認
 
 ```bash
-node scripts/post.mjs health     # {"ok":true,...}
-node scripts/post.mjs sources    # 投入したソース
+node scripts/post.mjs health     # {"ok":true,"sources_active":0,"policy_configured":false,...}
 ```
 
-ブラウザで `https://<your-worker>.workers.dev/sources` を開くとソース一覧が見える（閲覧は認証なし。変更は Bearer API のみ）。
+## 3. MCP を登録
 
-> **閲覧を制限したい場合**: Cloudflare Zero Trust の Access で Worker のホスト名を保護するのが簡単（無料枠 50 ユーザー）。`docs/CUSTOMIZE.md` 参照。
+```bash
+claude mcp add --transport http newsdigest https://<worker>/mcp --header "Authorization: Bearer <key>"
+```
 
-## 3. Claude Code ルーティンを登録
+以降、Claude Code に「ソース一覧見せて」で `list_sources` が呼ばれる。claude.ai からは `https://<worker>/mcp/<key>` をカスタムコネクタに（[docs/MCP.md](MCP.md)）。
 
-### 3-1. 環境変数を claude.ai の環境に登録
+## 4. ソースを設定
 
-https://claude.ai/code/environments で使う環境（既定 "Default"）を開き、**Environment variables** に登録する:
+**ここが一番大事**。出荷時点では空。何を読みたいかを決めて登録する。
+
+- Claude Code に頼む: 「Hacker News の RSS を追加して」「anthropics/claude-code のリリースを監視して」「@foo を X アカウントとして追加」
+- または JSON で一括: `sources.template.json` をコピーして編集 → `node scripts/post.mjs sources:put sources.json`
+
+書き方・選び方・例は [docs/SOURCES-AND-POLICY.md](SOURCES-AND-POLICY.md)。目安は 5〜15 ソース。
+
+## 5. 分析方針を設定
+
+「どう要約してほしいか」を Markdown で書いて保存する。**未設定のままだとルーティンはダイジェストを作らない**（既定の観点を勝手に補わない設計）。
+
+- Claude Code に頼む: 「分析方針を作りたい」→ 言語・トピック数・コメントの観点・除外ルールを聞かれる → `set_digest_policy`
+- または `policy.md` を書いて `node scripts/post.mjs policy:put policy.md`
+
+雛形と 3 つの例は [docs/SOURCES-AND-POLICY.md](SOURCES-AND-POLICY.md)。
+
+## 6. claude.ai の環境変数（利用者作業）
+
+https://claude.ai/code/environments で使う環境（既定 "Default"）を開き、**Environment variables** に登録:
 
 ```
-INTEL_API_URL=https://<your-worker>.workers.dev
-INTEL_API_KEY=<.env.local の値>
+NEWSDIGEST_API_URL=https://<worker>.workers.dev
+NEWSDIGEST_API_KEY=<.env.local の値>
 ```
 
 任意:
 
 ```
 XAI_API_KEY=xai-...              # X 収集
-DIGEST_LANG=ja                   # ja | en
+DIGEST_LANG=ja                   # 分析方針に言語指定が無いときの既定
 DIGEST_TZ=Asia/Tokyo
 NOTIFY_SLACK_WEBHOOK_URL=...     # 通知（docs/NOTIFICATIONS.md）
 ```
 
-同じ画面の **ネットワーク設定** で、ルーティンからコンソール（`*.workers.dev`）、`api.x.ai`、収集する RSS ホストへ到達できることを確認する（制限付きの場合は許可リストに追加）。
+同じ画面の **ネットワーク設定** で、ルーティンからコンソール（`*.workers.dev`）、`api.x.ai`、登録した RSS ホストへ到達できることを確認する（制限付きなら許可リストに追加）。
 
-### 3-2. ルーティンを作成（API 経由）
-
-ローカルの Claude Code でこのリポジトリを開き:
-
-```
-/intel-digest-routine
-```
-
-Claude が `routine/routine.template.json` と `routine/intel-digest.prompt.md` をもとに、内蔵のルーティン API ツール（`RemoteTrigger`）で日次ルーティンを作成する。確認されるのは「環境」「実行時刻（既定 07:15 JST）」「モデル（既定 claude-sonnet-5）」の 3 点。作成後そのまま初回を手動実行し、ログとコンソールで結果を確認する。
-
-ブラウザで作りたい場合は https://claude.ai/code/routines → New routine で、リポジトリにあなたの fork、プロンプトに `routine/intel-digest.prompt.md` の内容、スケジュールに毎日 07:15（ローカル時刻）を指定する。
-
-### 3-3. 月次の棚卸し（任意）
-
-同じ手順で `routine/intel-sources-review.prompt.md` を使うルーティンを毎月 1 日に 1 本追加する（`/intel-digest-routine` に「棚卸しも作って」と頼む）。
-
-## 4. 日々の使い方
-
-- **読む**: `https://<your-worker>.workers.dev`（最新は `/latest`）。モバイル対応
-- **ソースを変える**: ローカル Claude Code で「ソースに @handle を追加して」「○○ を pause して」。`intel-digest` スキルが `PUT /api/sources` で反映する。手で書くなら `node scripts/post.mjs sources > sources.json` → 編集 → `node scripts/post.mjs sources:put sources.json`
-- **今すぐ 1 回回す**: `/intel-digest-routine` で「今すぐ実行して」、またはローカルで `claude "/intel-digest"`（`.env.local` を読む）
-- **失敗したとき**: `/intel-digest-routine` で「最新の実行ログを見せて」→ `docs/ROUTINE.md` の対処表
-
-## 5. 更新の取り込み
-
-元リポジトリの更新を取り込むには fork の "Sync fork" か:
+## 7. push → ルーティン作成
 
 ```bash
-git remote add upstream https://github.com/bytask/intel-digest.git
+git add apps/console/wrangler.jsonc && git commit -m "setup: worker name / d1" && git push
+```
+
+Claude Code で:
+
+```
+/newsdigest-routine
+```
+
+`routine/routine.template.json` と `routine/newsdigest.prompt.md` をもとに、内蔵のルーティン API ツール（`RemoteTrigger`）で日次ルーティンを作成する。聞かれるのは「環境」「実行時刻（既定 07:15 JST）」「モデル（既定 claude-sonnet-5）」。作成後そのまま初回を手動実行し、ログとコンソールで結果を確認する。
+
+ブラウザで作る場合は https://claude.ai/code/routines → New routine で、リポジトリにあなたの fork、プロンプトに `routine/newsdigest.prompt.md` の内容、スケジュールに毎日 07:15（ローカル時刻）。
+
+月次棚卸し（任意）は `routine/newsdigest-sources-review.prompt.md` で毎月 1 日のルーティンをもう 1 本（`/newsdigest-routine` に「棚卸しも作って」）。
+
+## 8. 日々の使い方
+
+- **読む**: `https://<worker>.workers.dev`（最新は `/latest`）。モバイル対応
+- **ソース・分析方針を変える**: Claude Code / claude.ai に話す（MCP）。次の朝から反映
+- **今すぐ 1 回回す**: `/newsdigest-routine` で「今すぐ実行して」、またはローカルで `claude "/newsdigest"`（`.env.local` を読む）
+- **失敗したとき**: `/newsdigest-routine` で「最新の実行ログを見せて」→ [docs/ROUTINE.md](ROUTINE.md) の対処表
+
+## 9. 更新の取り込み
+
+fork の "Sync fork" か:
+
+```bash
+git remote add upstream https://github.com/bytask/newsdigest.git
 git fetch upstream && git merge upstream/main
 npm run console:deploy     # コンソールに変更があった場合
 ```
 
-スキル・スクリプトの変更はルーティンが次回チェックアウトで自動的に拾う（プロンプト本文 `routine/*.prompt.md` を変えた場合だけ `/intel-digest-routine` で「プロンプトを更新して」）。
+スキル・スクリプトの変更はルーティンが次回チェックアウトで拾う。`routine/*.prompt.md` を変えた場合だけ `/newsdigest-routine` で「プロンプトを更新して」。

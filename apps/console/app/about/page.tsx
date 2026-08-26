@@ -88,8 +88,7 @@ export default function AboutPage() {
           </li>
         </ul>
         <p className="group-footer">
-          ソースの追加・一時停止・削除は GUI からは行いません。Bearer 認証付き API（PUT /api/sources）
-          または Claude Code から「ソースに ○○ を追加して」と頼むと、API 経由で更新されます。
+          ソースの追加・一時停止・削除は GUI からは行いません。内蔵 MCP サーバー（/mcp）経由で Claude Code / claude.ai に頼むか、Bearer 認証付き API（PUT /api/sources）で行います。
         </p>
       </section>
 

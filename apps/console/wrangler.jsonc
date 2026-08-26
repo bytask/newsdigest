@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // Worker 名。公開URLは https://<name>.<your-subdomain>.workers.dev になる。
   // `npm run setup`（リポジトリ直下）が対話で書き換える。手動で変えてもよい。
-  "name": "intel-console",
+  "name": "newsdigest",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -13,16 +13,16 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "intel-console",
-      // `wrangler d1 create intel-console` の出力で置き換える（setup が自動で行う）
+      "database_name": "newsdigest",
+      // `wrangler d1 create newsdigest` の出力で置き換える（setup が自動で行う）
       "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
     }
   ],
   // 画面の表示名など（秘密でない設定）。secrets は `wrangler secret put <NAME>`:
-  //   INTEL_API_KEY            … 必須。機械向けAPI（/api/*）の Bearer トークン
+  //   NEWSDIGEST_API_KEY            … 必須。機械向けAPI（/api/*）の Bearer トークン
   //   LINE_CHANNEL_ID/SECRET   … 任意。LINE公式アカウントの Webhook（トピック詳細返信）を使う場合
   "vars": {
-    "APP_NAME": "Intel Digest",
+    "APP_NAME": "NewsDigest",
     "APP_TAGLINE": "ソースマスタ起点の日次インテリジェンス・ダイジェスト",
     "SCHEDULE_LABEL": "収集 07:15 JST・棚卸し 毎月1日"
   }
