@@ -1,0 +1,30 @@
+{
+  "name": "intel-console",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3150",
+    "build": "next build",
+    "start": "next start -p 3150",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "db:schema:remote": "wrangler d1 execute intel-console --remote --file=./schema.sql",
+    "db:schema:local": "wrangler d1 execute intel-console --local --file=./schema.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opennextjs/cloudflare": "^1.20.1",
+    "marked": "^15.0.0",
+    "mermaid": "^11.6.0",
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260719.1",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "typescript": "^5",
+    "wrangler": "^4.112.0"
+  }
+}

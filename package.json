@@ -1,0 +1,17 @@
+{
+  "name": "intel-digest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted daily intelligence digest: your sources, summarized by your own Claude Code routine, stored on your Cloudflare account.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "console:dev": "npm --prefix apps/console run dev",
+    "console:deploy": "npm --prefix apps/console run deploy",
+    "console:typecheck": "npm --prefix apps/console run typecheck",
+    "rss": "node scripts/fetch-rss.mjs",
+    "post": "node scripts/post.mjs"
+  }
+}

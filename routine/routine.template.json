@@ -1,0 +1,30 @@
+{
+  "_comment": "RemoteTrigger {action:'create', body:<this>} の body。{{...}} は intel-digest-routine スキルが埋める。cron は UTC（07:15 JST = 15 22 * * *）。",
+  "name": "intel-digest",
+  "cron_expression": "{{CRON}}",
+  "enabled": true,
+  "job_config": {
+    "ccr": {
+      "environment_id": "{{ENVIRONMENT_ID}}",
+      "session_context": {
+        "model": "{{MODEL}}",
+        "sources": [
+          { "git_repository": { "url": "{{REPO_URL}}" } }
+        ],
+        "allowed_tools": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "WebFetch", "WebSearch"]
+      },
+      "events": [
+        {
+          "data": {
+            "uuid": "{{UUID}}",
+            "session_id": "",
+            "type": "user",
+            "parent_tool_use_id": null,
+            "message": { "content": "{{PROMPT}}", "role": "user" }
+          }
+        }
+      ]
+    }
+  },
+  "mcp_connections": []
+}
