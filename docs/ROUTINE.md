@@ -18,6 +18,8 @@ AI 実行は Claude Code Web版の **ルーティン**（https://claude.ai/code/
 
 `embed` を既定にしている理由: ルーティン API には環境変数を書く手段がなく、そこだけ人手が残っていたため。埋め込むのは `read,write` の鍵（ダイジェストの登録・読み取りのみ。ソース・方針・鍵管理は不可）で、漏れても Settings で失効して差し替えれば他のクライアントは止まらない。`.env.local` にある任意の変数（`XAI_API_KEY` / `NOTIFY_*` / `LINE_CHANNEL_*` / `DIGEST_*`）も一緒に埋め込まれる（`--no-optional` で除外）。
 
+ルーティン API はアカウントに登録済みの **全コネクタ**（Gmail / Slack など）を `mcp_connections` に自動で付け、空にしても戻る。ただし `allowed_tools` に MCP ツールを含めていないので、ルーティンからは呼べない（headless では権限プロンプトが出ず拒否される）。
+
 `embed` の値は claude.ai のルーティン設定（編集画面・`RemoteTrigger get`）と実行ログに残る。自分だけのアカウントなら許容範囲だが、**共有アカウントや組織で運用するなら `env` を使う**（[AUTH.md](AUTH.md)）。
 
 `env` モードの登録先: https://claude.ai/code/environments → 環境（既定 Default）→ Environment variables に `NEWSDIGEST_API_URL` と `NEWSDIGEST_API_KEY`（= `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`）。同じ画面でネットワーク設定を確認（コンソールのホスト・`api.x.ai`・各 RSS ホスト）。
