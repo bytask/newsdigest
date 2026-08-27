@@ -19,7 +19,7 @@ AI 実行（収集・要約・登録・通知）は **このリポジトリを�
 | `routine/` | ルーティンに渡すプロンプトと作成テンプレート |
 | `scripts/` | `setup.mjs`（セットアップ CLI）/ `fetch-rss.mjs` / `post.mjs`（API クライアント）/ `notify.sh` |
 | `tools/xai-search/search.py` | X 収集（xAI x_search） |
-| `docs/` | SETUP / SOURCES-AND-POLICY / MCP / ROUTINE / API / NOTIFICATIONS / CUSTOMIZE / ARCHITECTURE |
+| `docs/` | SETUP / AUTH / SOURCES-AND-POLICY / MCP / ROUTINE / API / NOTIFICATIONS / CUSTOMIZE / ARCHITECTURE |
 
 ## 実行環境の前提
 
