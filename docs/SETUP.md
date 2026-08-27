@@ -84,18 +84,9 @@ claude mcp add --transport http newsdigest https://<worker>/mcp --header "Author
 
 雛形と 3 つの例は [docs/SOURCES-AND-POLICY.md](SOURCES-AND-POLICY.md)。
 
-## 6. claude.ai の環境変数（利用者作業）
+## 6. 任意設定（X 収集・通知）
 
-https://claude.ai/code/environments で使う環境（既定 "Default"）を開き、**Environment variables** に登録:
-
-```
-NEWSDIGEST_API_URL=https://<worker>.workers.dev
-NEWSDIGEST_API_KEY=<routine 鍵 = .env.local の NEWSDIGEST_ROUTINE_API_KEY の値>
-```
-
-ルーティンには `read,write` の鍵だけを渡す（ローカルの `NEWSDIGEST_API_KEY` = local 鍵は admin まで持つので貼らない）。
-
-任意:
+`.env.local` に追記しておくと、次の手順でルーティンにも一緒に渡される:
 
 ```
 XAI_API_KEY=xai-...              # X 収集
@@ -104,9 +95,7 @@ DIGEST_TZ=Asia/Tokyo
 NOTIFY_SLACK_WEBHOOK_URL=...     # 通知（docs/NOTIFICATIONS.md）
 ```
 
-同じ画面の **ネットワーク設定** で、ルーティンからコンソール（`*.workers.dev`）、`api.x.ai`、登録した RSS ホストへ到達できることを確認する（制限付きなら許可リストに追加）。
-
-## 7. push → ルーティン作成
+## 7. push → ルーティン作成（ゼロタッチ）
 
 ```bash
 git add apps/console/wrangler.jsonc && git commit -m "setup: worker name / d1" && git push
@@ -118,9 +107,11 @@ Claude Code で:
 /newsdigest-routine
 ```
 
-`routine/routine.template.json` と `routine/newsdigest.prompt.md` をもとに、内蔵のルーティン API ツール（`RemoteTrigger`）で日次ルーティンを作成する。聞かれるのは「環境」「実行時刻（既定 07:15 JST）」「モデル（既定 claude-sonnet-5）」。作成後そのまま初回を手動実行し、ログとコンソールで結果を確認する。
+`node scripts/routine.mjs body` が `routine/routine.template.json` と `routine/newsdigest.prompt.md` から作成 body を組み立て、内蔵のルーティン API ツール（`RemoteTrigger`）で日次ルーティンを作成する。既定の **`embed` モード**では `routine` 鍵（read,write）とコンソール URL をプロンプトに埋め込むので、claude.ai 側で利用者がやることは無い。作成後そのまま初回を手動実行し、ログとコンソールで結果を確認する。
 
-ブラウザで作る場合は https://claude.ai/code/routines → New routine で、リポジトリにあなたの fork、プロンプトに `routine/newsdigest.prompt.md` の内容、スケジュールに毎日 07:15（ローカル時刻）。
+鍵をルーティン設定に残したくない場合は `env` モード: https://claude.ai/code/environments の環境（既定 Default）→ Environment variables に `NEWSDIGEST_API_URL` と `NEWSDIGEST_API_KEY`（= `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`）を自分で登録し、`/newsdigest-routine` に「環境変数方式で」と伝える。2 方式の比較は [ROUTINE.md](ROUTINE.md)。
+
+手で作る場合は `node scripts/routine.mjs body --env-id <env_...> --redact` の出力を参考に https://claude.ai/code/routines → New routine（リポジトリ = あなたの fork、プロンプト = 出力の `message.content`、毎日 07:15）。
 
 月次棚卸し（任意）は `routine/newsdigest-sources-review.prompt.md` で毎月 1 日のルーティンをもう 1 本（`/newsdigest-routine` に「棚卸しも作って」）。
 

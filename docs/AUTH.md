@@ -34,10 +34,14 @@ claude.ai コネクタ ──[URL に read 専用の鍵]──▶ /mcp/<key>
 | name | scopes | 渡す先 |
 |---|---|---|
 | `local` | read, write, manage, admin | `.env.local` の `NEWSDIGEST_API_KEY`（`post.mjs`・Claude Code の MCP 登録） |
-| `routine` | read, write | claude.ai の環境変数 `NEWSDIGEST_API_KEY`（`.env.local` には `NEWSDIGEST_ROUTINE_API_KEY` として控え） |
+| `routine` | read, write | ルーティンのプロンプトに埋め込み（`embed`、既定）または claude.ai の環境変数 `NEWSDIGEST_API_KEY`（`env`）。`.env.local` には `NEWSDIGEST_ROUTINE_API_KEY` として控え |
 | `claude-ai` | read | claude.ai カスタムコネクタの URL `https://<worker>/mcp/<key>` |
 
 ルーティンに `manage` を渡さないのは意図的: ルーティンが読む外部コンテンツ（RSS 本文・X 投稿）にプロンプトインジェクションがあっても、ソースマスタや分析方針を書き換えられない。
+
+### ルーティンへの鍵の渡し方
+
+ルーティン API には環境変数を書く手段が無いので、既定（`embed`）では `routine` 鍵をルーティンのプロンプトに埋め込み、ルーティンが起動時に `.env` を作る。鍵は利用者自身の claude.ai アカウント内（ルーティン設定・実行ログ）に残る。`read,write` に限定しているのはこのため。共有アカウントなど「設定に鍵を残せない」場合は `env` モード（利用者が Environment variables に登録）を使う。詳細と切替は [ROUTINE.md](ROUTINE.md)。
 
 ## 鍵の管理
 
@@ -69,7 +73,7 @@ v0.1 と同じく閲覧 UI を認証なしで公開したい場合は `apps/cons
 
 | 漏れたもの | 対処 | 影響範囲 |
 |---|---|---|
-| API キー 1 本 | Settings または `keys:revoke <id>` で失効 → 必要なら同名で再発行し、使っていた場所を差し替え | その鍵のクライアントだけ |
+| API キー 1 本 | Settings または `keys:revoke <id>` で失効 → 必要なら同名で再発行し、使っていた場所を差し替え（`routine` 鍵は `/newsdigest-routine` の rotate） | その鍵のクライアントだけ |
 | UI パスワード | Settings の「パスワード」で変更（ローカルから `node scripts/post.mjs password:set` でもリセット可） | ブラウザのみ。既存 Cookie は期限まで有効なので、急ぐなら `SESSION_SECRET` も差し替える |
 | `SESSION_SECRET` | `cd apps/console && npx wrangler secret put SESSION_SECRET` | 全ブラウザが再ログイン。API キーは無関係 |
 | ブートストラップ鍵 | `npx wrangler secret put NEWSDIGEST_API_KEY` → `.env.local` の `NEWSDIGEST_BOOTSTRAP_KEY` も更新 | なし（日常では未使用） |

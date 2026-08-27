@@ -1,5 +1,5 @@
 {
-  "_comment": "RemoteTrigger {action:'create', body:<this>} の body。{{...}} は newsdigest-routine スキルが埋める。cron は UTC（07:15 JST = 15 22 * * *）。",
+  "_comment": "RemoteTrigger {action:'create', body:<this>} の body。{{...}} は scripts/routine.mjs が埋める（プロンプト内の {{ENV_BLOCK}} も）。cron は UTC（07:15 JST = 15 22 * * *）。",
   "name": "newsdigest",
   "cron_expression": "{{CRON}}",
   "enabled": true,

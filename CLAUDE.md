@@ -16,14 +16,14 @@ AI 実行（収集・要約・登録・通知）は **このリポジトリを�
 | `.claude/skills/newsdigest/` | 日次収集・要約・登録・通知の手順（source of truth）。ソース・分析方針の変更依頼もここ |
 | `.claude/skills/newsdigest-sources-review/` | 月次ソース棚卸し |
 | `.claude/skills/newsdigest-routine/` | ルーティンの作成・更新・実行・デバッグ（ローカルで使う） |
-| `routine/` | ルーティンに渡すプロンプトと作成テンプレート |
-| `scripts/` | `setup.mjs`（セットアップ CLI）/ `fetch-rss.mjs` / `post.mjs`（API クライアント）/ `notify.sh` |
+| `routine/` | ルーティンに渡すプロンプトと作成テンプレート（`{{ENV_BLOCK}}` に認証情報ブロックが入る） |
+| `scripts/` | `setup.mjs`（セットアップ CLI）/ `routine.mjs`（ルーティン body 生成）/ `fetch-rss.mjs` / `post.mjs`（API クライアント）/ `notify.sh` |
 | `tools/xai-search/search.py` | X 収集（xAI x_search） |
 | `docs/` | SETUP / AUTH / SOURCES-AND-POLICY / MCP / ROUTINE / API / NOTIFICATIONS / CUSTOMIZE / ARCHITECTURE |
 
 ## 実行環境の前提
 
-- 環境変数 `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` が必須。ルーティンでは claude.ai の環境設定から、ローカルでは `.env` / `.env.local` から供給される（`scripts/*.mjs` と `notify.sh` は `.env.local` → `.env` の順に自動で読む）
+- 環境変数 `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` が必須。ルーティンではプロンプトの手順 0 で作る `.env`（既定の `embed`）か claude.ai の環境設定（`env`）から、ローカルでは `.env` / `.env.local` から供給される（`scripts/*.mjs` と `notify.sh` は `.env.local` → `.env` の順に自動で読む）
 - API キーはスコープ付き（`read / write / manage / admin`、`docs/AUTH.md`）。ルーティンは `read,write` の `routine` 鍵、ローカルは全スコープの `local` 鍵。403 が出たら鍵のスコープ不足なので、Settings（`/settings`）か `node scripts/post.mjs keys:add` で適切な鍵を発行する
 - 閲覧 UI はパスワードログイン。パスワードは `npm run setup` が 1 回だけ表示する。忘れたら `node scripts/post.mjs password:set`
 - ソースと分析方針はコンソール（D1）にある。MCP `newsdigest` が登録されていればそれで読み書きし、無ければ `scripts/post.mjs`（`sources` / `policy`）で読み書きする

@@ -9,7 +9,7 @@ description: NewsDigest の初期セットアップを Claude Code が代行す�
 
 進め方の原則:
 - 各フェーズの冒頭で「これから何をするか・利用者に何を聞くか」を 1〜2 行で伝える
-- ブラウザ操作が必要な箇所（Cloudflare ログイン、claude.ai 環境変数、GitHub push）は **利用者に依頼して待つ**。代行しようとしない
+- 利用者の手作業は **Cloudflare ログイン（`wrangler login`、初回 1 回）だけ**にする。GitHub の fork / push は `gh` で代行し、ルーティンの認証情報はプロンプトに埋め込む（`embed` モード）ので claude.ai 側の設定作業は不要。ブラウザ操作が避けられない箇所は利用者に依頼して待つ（代行しようとしない）
 - 秘密（API キー）はチャットに繰り返し貼らない。`.env.local` と `setup --json` の出力から必要な箇所だけ引用する
 
 ## Phase 1: 前提確認
@@ -21,7 +21,12 @@ ls .env.local 2>/dev/null && echo "setup済みの可能性"
 ```
 
 - Node 20 未満 → インストールを依頼して終了
-- origin が無い / 元リポジトリ（bytask/newsdigest）を指している → 「自分の GitHub に fork（または Use this template）して、その URL を origin にしてください」と依頼。ルーティンは利用者自身のリポジトリを checkout するため必須
+- origin が無い / 元リポジトリ（bytask/newsdigest）を指している → ルーティンは利用者自身のリポジトリを checkout するため fork が必須。`gh auth status` が通るなら代行する:
+  ```bash
+  gh repo fork bytask/newsdigest --remote=true --default-branch-only   # origin=fork, upstream=元リポジトリ に付け替わる
+  git remote get-url origin
+  ```
+  `gh` が無い / 未認証なら「自分の GitHub に fork（または Use this template）して、その URL を origin にしてください」と依頼して待つ
 - `.env.local` があれば「再セットアップ」として扱い、Phase 2 は `npm run setup -- --yes` で冪等に流す
 
 ## Phase 2: コンソールをデプロイ
@@ -72,24 +77,19 @@ claude.ai（Web / モバイル）からも使いたいと言われたら `connec
 
 `docs/SOURCES-AND-POLICY.md` の雛形に沿って Markdown を書き、利用者に見せて確認後、MCP `set_digest_policy` で保存する。**利用者の回答なしに既定の方針を勝手に入れない**（空のままルーティンを作ると、ルーティンは「方針未設定」で止まる設計）。
 
-## Phase 6: ルーティン用の環境変数（利用者作業）
+## Phase 6: 任意設定の聞き取り（X 収集・通知）
 
-利用者に依頼して待つ:
+ルーティンの認証情報は Phase 7 でプロンプトに埋め込む（`embed` モード）ので、claude.ai 側で利用者にやってもらうことは無い。ここでは任意機能だけ確認する:
 
-> https://claude.ai/code/environments で使う環境（既定 Default）を開き、Environment variables に以下を追加してください:
-> - `NEWSDIGEST_API_URL` = `<url>`
-> - `NEWSDIGEST_API_KEY` = **`routine` 鍵**（`.env.local` の `NEWSDIGEST_ROUTINE_API_KEY` の値。read,write のみ。ローカルの `NEWSDIGEST_API_KEY` ではない）
-> - （任意）`XAI_API_KEY`、`NOTIFY_SLACK_WEBHOOK_URL` など（`.env.example` 参照）
->
-> 同じ画面でネットワーク設定を確認し、`<url のホスト>`・`api.x.ai`・登録した RSS のホストへ到達できるようにしてください。
+1. X（xAI）を使うなら `XAI_API_KEY` を `.env.local` に追記してもらう（Phase 4 で聞いていれば済んでいる）
+2. 通知が欲しいなら `docs/NOTIFICATIONS.md` に沿って Webhook を用意してもらい、`NOTIFY_SLACK_WEBHOOK_URL` 等を `.env.local` に追記する
+3. `.env.local` にあるこれらの値は Phase 7 でルーティンに一緒に埋め込まれる旨を伝える。**「鍵をルーティン設定に残したくない」と言われたら** `env` モード（利用者が claude.ai の Environment variables に登録する。手順は `docs/ROUTINE.md`）に切り替える
 
-通知を使うなら `docs/NOTIFICATIONS.md` に沿って Webhook を用意してもらい、同じ画面に登録する。
-
-## Phase 7: GitHub に push → ルーティン作成
+## Phase 7: GitHub に push → ルーティン作成（ゼロタッチ）
 
 1. `git status` で変更（`apps/console/wrangler.jsonc` の name / database_id）を確認し、commit → push（`.env.local` は gitignore 済みであることを `git status` で再確認）
-2. `/newsdigest-routine` を実行（このスキルの続きとして同じセッションで進めてよい）。作成後に初回を手動実行し、`node scripts/post.mjs digests` に今日の名前が出るまで確認する
-3. 完了報告: コンソール URL（ログインはセットアップ時に伝えたパスワード）、`/latest`、`/settings`（鍵の管理）、次回実行時刻、MCP の使い方（「ソースに ○○ を追加して」「今日のダイジェスト見せて」）を利用者に伝える
+2. `/newsdigest-routine` を実行（このスキルの続きとして同じセッションで進めてよい）。既定の `embed` モードで `node scripts/routine.mjs body --env-id <環境 ID>` → `RemoteTrigger create` → 初回を `run` → `list_runs` / `get_run_log` → `node scripts/post.mjs digests` に今日の名前が出るまで確認する。環境 ID は `RemoteTrigger list` の既存ルーティンから拾い、無ければ `/schedule` の一覧から "Default" を選ぶ
+3. 完了報告: コンソール URL（ログインはセットアップ時に伝えたパスワード）、`/latest`、`/settings`（鍵の管理）、ルーティンの URL と次回実行時刻、MCP の使い方（「ソースに ○○ を追加して」「今日のダイジェスト見せて」）を利用者に伝える。鍵はチャットに貼らない
 
 ## トラブル時
 

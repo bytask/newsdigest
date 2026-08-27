@@ -71,8 +71,10 @@ claude
 2. **MCP を登録** — `claude mcp add … newsdigest https://<worker>/mcp`（local 鍵）
 3. **ソースを設定** — 「何に関心があるか」「よく読む媒体は」を聞き、候補を探して MCP `add_source` で登録
 4. **分析方針を設定** — 言語・トピック数・コメントの観点・除外ルールを聞いて Markdown にし、MCP `set_digest_policy` で保存
-5. **claude.ai の環境変数**を案内（`NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` = routine 鍵。ここだけ利用者作業）
-6. **ルーティン作成** — `/newsdigest-routine` がルーティン API（`RemoteTrigger`）で日次ルーティン（既定 07:15 JST）を作り、初回を手動実行して結果を確認
+5. **任意設定** — X 収集（xAI キー）や通知先が要るかを聞く
+6. **ルーティン作成** — `/newsdigest-routine` がルーティン API（`RemoteTrigger`）で日次ルーティン（既定 07:15 JST）を作り、初回を手動実行して結果を確認。認証情報はルーティンに埋め込むので claude.ai 側の設定作業は不要
+
+利用者の手作業は **Cloudflare ログイン（初回 1 回）だけ**。GitHub の fork も `gh` があれば Claude Code が代行する。
 
 翌朝から `https://<your-worker>.workers.dev/latest` にダイジェストが並ぶ（閲覧はパスワードでログイン）。
 
@@ -114,7 +116,7 @@ claude.ai（Web / モバイル）からはカスタムコネクタ `https://<wor
 
 ### 認証
 - **人はパスワード、機械はスコープ付き API キー**（`read / write / manage / admin`）。鍵はハッシュで保存、Settings 画面で発行・失効
-- ルーティンには `read,write` だけ渡す（外部コンテンツ経由のプロンプトインジェクションでもソース・方針を書き換えられない）
+- ルーティンには `read,write` だけ渡す（外部コンテンツ経由のプロンプトインジェクションでもソース・方針を書き換えられない）。渡し方はプロンプト埋め込み（既定・ゼロタッチ）か claude.ai 環境変数（[docs/ROUTINE.md](docs/ROUTINE.md)）
 - 閲覧 UI はパスワード + 30 日 Cookie。`PUBLIC_UI=1` で公開モードにも戻せる。詳細: [docs/AUTH.md](docs/AUTH.md)
 
 ### AI 統合
@@ -135,7 +137,7 @@ newsdigest/
 │   ├── newsdigest-sources-review/ 月次ソース棚卸し
 │   └── newsdigest-routine/        ルーティンの作成・更新・実行・デバッグ
 ├── routine/                   ルーティンのプロンプトと作成テンプレート
-├── scripts/                   setup.mjs / fetch-rss.mjs / post.mjs / notify.sh
+├── scripts/                   setup.mjs / routine.mjs / fetch-rss.mjs / post.mjs / notify.sh
 ├── tools/xai-search/          xAI x_search クライアント
 ├── sources.template.json      ソースマスタの空テンプレート
 └── docs/

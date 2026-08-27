@@ -7,7 +7,7 @@
 │ Claude Code ルーティン（claude.ai / Anthropic のクラウドサンドボックス）│
 │  cron 15 22 * * * (UTC) = 07:15 JST                              │
 │  1. あなたの GitHub から newsdigest を checkout                  │
-│  2. 環境変数 NEWSDIGEST_API_URL / NEWSDIGEST_API_KEY / XAI_API_KEY …        │
+│  2. 認証情報: プロンプト埋め込み(embed, 既定) or 環境変数(env) → .env     │
 │  3. .claude/skills/newsdigest/SKILL.md を実行                   │
 │       GET /api/sources ──────────────────────────┐              │
 │       fetch-rss.mjs（RSS/Atom/releases.atom）      │              │
@@ -45,7 +45,7 @@
 - **スキルが source of truth**。ルーティンもローカル手動実行も同じ `.claude/skills/` を読む。手順の改善は git push だけで次回実行から反映される
 - **ルーティンはステートレス**。毎回クリーンなサンドボックスで checkout → 実行 → 終了。状態はすべて D1 側
 - **ソースと分析方針は利用者が設定**。リポジトリは既定値を持たない（空で出荷）。設定は MCP（Claude Code / claude.ai）か REST
-- **秘密は 2 箇所だけ**。Worker secret（`NEWSDIGEST_API_KEY` = ブートストラップ鍵、`SESSION_SECRET`、`LINE_CHANNEL_*`）と claude.ai 環境変数。リポジトリには入れない
+- **秘密は 2 箇所だけ**。Worker secret（`NEWSDIGEST_API_KEY` = ブートストラップ鍵、`SESSION_SECRET`、`LINE_CHANNEL_*`）と claude.ai 側（ルーティン設定に埋め込んだ `routine` 鍵、または環境変数）。リポジトリには入れない
 - **人はパスワード、機械はスコープ付き API キー**。鍵は D1 にハッシュで保存し、Settings 画面で発行・失効する（[AUTH.md](AUTH.md)）
 
 ## ルーティンの実体
@@ -53,7 +53,7 @@
 Claude Code Web版の **routines**（https://claude.ai/code/routines）は、cron で Claude Code のクラウドセッションを起動し、指定リポジトリを checkout してプロンプトを実行する仕組み。本パッケージでは:
 
 - 作成・更新・手動実行・ログ取得は Claude Code 内蔵の `RemoteTrigger` ツール（claude.ai のルーティン API）で行う → `.claude/skills/newsdigest-routine/`
-- `routine/routine.template.json` が create リクエストの body。`allowed_tools` は Bash / Read / Write / Edit / Glob / Grep / Skill / WebFetch / WebSearch
+- `scripts/routine.mjs` が `routine/routine.template.json` と `routine/*.prompt.md` から create / update の body を組み立てる（既定は認証情報をプロンプトに埋め込む `embed`）。`allowed_tools` は Bash / Read / Write / Edit / Glob / Grep / Skill / WebFetch / WebSearch
 - MCP コネクタは不要（コンソールは Bearer API で直接叩く）
 - 最小間隔は 1 時間。cron は UTC
 

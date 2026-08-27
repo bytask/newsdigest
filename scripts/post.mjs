@@ -13,7 +13,7 @@
 //   node scripts/post.mjs raw:get <date>               GET  /api/raw/<date>
 //   node scripts/post.mjs whoami                       GET  /api/auth/session（この鍵のスコープ）
 //   node scripts/post.mjs keys                         GET  /api/keys（admin）
-//   node scripts/post.mjs keys:add <name> <scopes> [YYYY-MM-DD]   POST /api/keys（admin）。scopes は read,write,manage,admin のカンマ区切り
+//   node scripts/post.mjs keys:add <name> <scopes> [YYYY-MM-DD] [--save VAR]   POST /api/keys（admin）。scopes は read,write,manage,admin のカンマ区切り。--save で .env.local の VAR に書き込む
 //   node scripts/post.mjs keys:revoke <id>             DELETE /api/keys/<id>（admin）
 //   node scripts/post.mjs password:set [password]      PUT  /api/auth/password（admin）。省略時はランダム生成して表示
 //
@@ -23,7 +23,10 @@ import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { loadEnv, requireEnv } from "./env.mjs";
 
-const [cmd, a1, a2] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const flagOpt = (n) => { const i = argv.indexOf(n); return i >= 0 ? (argv[i + 1] ?? "") : undefined; };
+const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1] === "--save"));
+const [cmd, a1, a2, a3] = positional;
 if (!cmd) {
   console.error(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 21).join("\n"));
   process.exit(1);
@@ -113,10 +116,19 @@ switch (cmd) {
   case "keys": console.log(JSON.stringify(await call("GET", "/api/keys", undefined, { admin: true }), null, 2)); break;
   case "keys:add": {
     if (!a1 || !a2) { console.error("usage: keys:add <name> <scopes: read,write,manage,admin> [YYYY-MM-DD]"); process.exit(1); }
-    const expires_at = process.argv[5] || null;
+    const expires_at = a3 || null;
     const r = await call("POST", "/api/keys", { name: a1, scopes: a2.split(","), expires_at }, { admin: true });
+    const save = flagOpt("--save");
+    if (save && /^[A-Z_][A-Z0-9_]*$/.test(save)) {
+      const { existsSync, writeFileSync } = await import("node:fs");
+      const p = new URL("../.env.local", import.meta.url);
+      let env = existsSync(p) ? readFileSync(p, "utf8") : "";
+      env = new RegExp(`^${save}=`, "m").test(env) ? env.replace(new RegExp(`^${save}=.*$`, "m"), `${save}=${r.key}`) : env + `${save}=${r.key}\n`;
+      writeFileSync(p, env);
+      console.error(`※ .env.local の ${save} に保存しました`);
+    }
     console.log(JSON.stringify(r, null, 2));
-    console.error("※ 平文の鍵はこの出力にしか出ません");
+    console.error("※ 平文の鍵はこの出力（と --save 先）にしか出ません");
     break;
   }
   case "keys:revoke": {

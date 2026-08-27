@@ -5,26 +5,41 @@ AI 実行は Claude Code Web版の **ルーティン**（https://claude.ai/code/
 ## ルーティンが実行時にやること
 
 1. あなたの GitHub リポジトリ（fork）を新しいサンドボックスに checkout
-2. 環境（claude.ai/code/environments）に登録した環境変数を受け取る
+2. 認証情報を用意する（下の 2 方式のどちらか）
 3. `routine/newsdigest.prompt.md` のプロンプトを受け取り、`.claude/skills/newsdigest/SKILL.md` に従って実行
 4. セッション終了。成果物はコンソール（D1）にだけ残る（`DIGEST_COMMIT_LOGS=1` なら `digests/` にも）
 
+## 認証情報の渡し方（2 方式）
+
+| mode | 仕組み | 利用者の手作業 |
+|---|---|---|
+| **`embed`（既定）** | `routine` 鍵（read,write）とコンソール URL を **ルーティンのプロンプトに埋め込む**。ルーティンは起動直後にリポジトリ直下へ `.env` を書き、`scripts/*` がそれを読む | なし（ゼロタッチ） |
+| `env` | claude.ai の環境設定（Environment variables）に `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` を **利用者が登録**する | 登録が 1 回 |
+
+`embed` を既定にしている理由: ルーティン API には環境変数を書く手段がなく、そこだけ人手が残っていたため。埋め込むのは `read,write` の鍵（ダイジェストの登録・読み取りのみ。ソース・方針・鍵管理は不可）で、漏れても Settings で失効して差し替えれば他のクライアントは止まらない。`.env.local` にある任意の変数（`XAI_API_KEY` / `NOTIFY_*` / `LINE_CHANNEL_*` / `DIGEST_*`）も一緒に埋め込まれる（`--no-optional` で除外）。
+
+`embed` の値は claude.ai のルーティン設定（編集画面・`RemoteTrigger get`）と実行ログに残る。自分だけのアカウントなら許容範囲だが、**共有アカウントや組織で運用するなら `env` を使う**（[AUTH.md](AUTH.md)）。
+
+`env` モードの登録先: https://claude.ai/code/environments → 環境（既定 Default）→ Environment variables に `NEWSDIGEST_API_URL` と `NEWSDIGEST_API_KEY`（= `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`）。同じ画面でネットワーク設定を確認（コンソールのホスト・`api.x.ai`・各 RSS ホスト）。
+
 ## 作成
 
-`/newsdigest-routine` → 対話で以下を決める:
+`/newsdigest-routine` → 既定値で作るか、以下を対話で決める:
 
 | 項目 | 既定 | 備考 |
 |---|---|---|
-| 環境 | Default | 環境変数はここに登録する |
+| mode | `embed` | 上記 |
+| 環境 | 既存ルーティンと同じ（無ければ Default） | `scripts/routine.mjs --env-id`。`.env.local` の `NEWSDIGEST_ROUTINE_ENV_ID` に保存される |
 | 時刻 | 07:15 JST（cron `15 22 * * *` UTC） | cron は UTC。最小間隔 1 時間 |
 | モデル | `claude-sonnet-5` | 品質優先なら `claude-opus-5`（消費が増える） |
 | リポジトリ | `git remote origin` | あなたの fork |
 
-作成 body は `routine/routine.template.json`。作成後に初回を手動実行して、`node scripts/post.mjs digests` に今日の名前が出れば成功。
+作成 body は `node scripts/routine.mjs body` が `routine/routine.template.json` と `routine/newsdigest.prompt.md`（`{{ENV_BLOCK}}` に認証情報ブロックが入る）から組み立てる。作成後に初回を手動実行して、`node scripts/post.mjs digests` に今日の名前が出れば成功。
 
-## 更新・停止
+## 更新・停止・鍵の差し替え
 
-- 時刻変更 / 一時停止 / モデル変更 / プロンプト差し替え → `/newsdigest-routine` に頼む（`update`）
+- 時刻変更 / 一時停止 / モデル変更 / プロンプト差し替え → `/newsdigest-routine` に頼む（`update`。`node scripts/routine.mjs body --job-config-only` の出力を渡す）
+- 鍵のローテーション（`embed`）→ 「ルーティンの鍵を差し替えて」: `keys:add routine read,write --save NEWSDIGEST_ROUTINE_API_KEY` → `update` → 古い鍵を `keys:revoke`
 - 削除はブラウザ（https://claude.ai/code/routines）から
 
 ## 手動実行
@@ -38,7 +53,7 @@ AI 実行は Claude Code Web版の **ルーティン**（https://claude.ai/code/
 
 | 症状 | 原因 | 対処 |
 |---|---|---|
-| ログに `missing env: NEWSDIGEST_API_URL` | 環境変数未登録 | 環境の Environment variables に登録し直す |
+| ログに `missing env: NEWSDIGEST_API_URL` | `env` モードで環境変数未登録 / `embed` で `.env` 作成が飛ばされた | `env`: Environment variables に登録 / `embed`: `update` でプロンプトを入れ直し、ログで手順 0 の実行を確認 |
 | `health` が到達不能 / `fetch failed` | サンドボックスのネットワーク制限 | 環境設定でコンソールのホスト・`api.x.ai`・RSS ホストを許可（または制限なし） |
 | `HTTP 401` | 鍵が無効（失効・期限切れ・貼り間違い） | Settings で `routine` 鍵を再発行し、環境変数 `NEWSDIGEST_API_KEY` を差し替える |
 | `HTTP 403 scope 'write' required` | 鍵のスコープ不足（read 鍵を貼っている等） | ルーティンには `read,write` の鍵を使う（`.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`） |
