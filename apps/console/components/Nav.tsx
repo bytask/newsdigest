@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IconNews, IconList, IconRadiowaves, IconInfo, IconMenu } from "./icons";
+import { IconNews, IconList, IconRadiowaves, IconInfo, IconMenu, IconGear } from "./icons";
 
 const ITEMS = [
   { href: "/", label: "Digests", icon: IconNews, match: (p: string) => p === "/" || p.startsWith("/d/") },
   { href: "/raw", label: "Raw", icon: IconList, match: (p: string) => p.startsWith("/raw") },
   { href: "/sources", label: "Sources", icon: IconRadiowaves, match: (p: string) => p.startsWith("/sources") },
   { href: "/about", label: "About", icon: IconInfo, match: (p: string) => p.startsWith("/about") },
+  { href: "/settings", label: "Settings", icon: IconGear, match: (p: string) => p.startsWith("/settings") },
 ];
 
 function NavItems({ pathname }: { pathname: string }) {

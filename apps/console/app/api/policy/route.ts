@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiKey } from "@/lib/auth";
+import { authenticate, requireScope } from "@/lib/auth";
 import { getPolicy, setPolicy } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // GET  → text/markdown（未設定なら 204）
 // PUT  → { "markdown": "..." } または text/markdown ボディ
 export async function GET(req: NextRequest) {
-  const denied = requireApiKey(req);
+  const denied = requireScope(await authenticate(req), "read");
   if (denied) return denied;
   const p = await getPolicy();
   if (!p) return new NextResponse(null, { status: 204 });
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const denied = requireApiKey(req);
+  const denied = requireScope(await authenticate(req), "manage");
   if (denied) return denied;
   const ct = req.headers.get("content-type") ?? "";
   let md = "";

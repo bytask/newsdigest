@@ -241,3 +241,89 @@ export function parseFrontmatter(md: string): { meta: Frontmatter; body: string 
   }
   return { meta, body: md.slice(m[0].length) };
 }
+
+// ── meta 汎用 ──
+
+export async function getMetaValue(key: string): Promise<string> {
+  const row = await db().prepare("SELECT value FROM meta WHERE key = ?1").bind(key).first<{ value: string }>();
+  return row?.value ?? "";
+}
+export async function setMetaValue(key: string, value: string): Promise<void> {
+  await db().prepare("INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = ?2").bind(key, value).run();
+}
+
+// ── UI パスワード（ハッシュは lib/auth.ts が作る） ──
+
+export const getPasswordHash = () => getMetaValue("ui_password");
+export const setPasswordHash = (h: string) => setMetaValue("ui_password", h);
+
+// ── API キー ──
+
+export interface ApiKeyRow {
+  id: string; name: string; key_hash: string; scopes: string;
+  created_at: string; expires_at: string | null; last_used: string | null; revoked_at: string | null;
+}
+export type ApiKeyPublic = Omit<ApiKeyRow, "key_hash">;
+
+const KEY_COLS = "id, name, scopes, created_at, expires_at, last_used, revoked_at";
+
+export async function listApiKeys(): Promise<ApiKeyPublic[]> {
+  const { results } = await db().prepare(`SELECT ${KEY_COLS} FROM api_keys ORDER BY created_at DESC, id`).all<ApiKeyPublic>();
+  return results;
+}
+
+export async function getApiKeyById(id: string): Promise<ApiKeyRow | null> {
+  return (await db().prepare("SELECT * FROM api_keys WHERE id = ?1").bind(id).first<ApiKeyRow>()) ?? null;
+}
+
+export async function countActiveApiKeys(): Promise<number> {
+  const r = await db().prepare("SELECT count(*) AS n FROM api_keys WHERE revoked_at IS NULL").first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
+function randomId(len: number): string {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(len));
+  return [...bytes].map((b) => alphabet[b % alphabet.length]).join("");
+}
+function randomSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); // 43 文字
+}
+async function sha256hexLocal(s: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// 鍵を発行する。平文はこの戻り値にしか存在しない。
+export async function createApiKey(name: string, scopes: string[], expiresAt?: string | null): Promise<{ id: string; key: string; name: string; scopes: string[]; expires_at: string | null }> {
+  const id = randomId(8);
+  const key = `nd_${id}_${randomSecret()}`;
+  await db().prepare("INSERT INTO api_keys (id, name, key_hash, scopes, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)")
+    .bind(id, name, await sha256hexLocal(key), scopes.join(","), expiresAt ?? null).run();
+  return { id, key, name, scopes, expires_at: expiresAt ?? null };
+}
+
+export async function revokeApiKey(id: string): Promise<boolean> {
+  const r = await db().prepare("UPDATE api_keys SET revoked_at = datetime('now') WHERE id = ?1 AND revoked_at IS NULL").bind(id).run();
+  return (r.meta.changes ?? 0) > 0;
+}
+
+export async function touchApiKey(id: string): Promise<void> {
+  await db().prepare("UPDATE api_keys SET last_used = datetime('now') WHERE id = ?1").bind(id).run();
+}
+
+// ── ログイン試行のレートリミット（IP × 10 分窓）。許可なら true ──
+
+export async function allowLoginAttempt(ip: string, max = 10): Promise<boolean> {
+  const windowStart = new Date(Math.floor(Date.now() / 600_000) * 600_000).toISOString();
+  const row = await db().prepare("SELECT count FROM login_attempts WHERE ip = ?1 AND window_start = ?2").bind(ip, windowStart).first<{ count: number }>();
+  if ((row?.count ?? 0) >= max) return false;
+  await db().batch([
+    db().prepare("INSERT INTO login_attempts (ip, window_start, count) VALUES (?1, ?2, 1) ON CONFLICT(ip, window_start) DO UPDATE SET count = count + 1").bind(ip, windowStart),
+    db().prepare("DELETE FROM login_attempts WHERE window_start < ?1").bind(new Date(Date.now() - 3_600_000).toISOString()),
+  ]);
+  return true;
+}

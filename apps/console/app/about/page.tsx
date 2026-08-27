@@ -88,8 +88,16 @@ export default function AboutPage() {
           </li>
         </ul>
         <p className="group-footer">
-          ソースの追加・一時停止・削除は GUI からは行いません。内蔵 MCP サーバー（/mcp）経由で Claude Code / claude.ai に頼むか、Bearer 認証付き API（PUT /api/sources）で行います。
+          ソースの追加・一時停止・削除は GUI からは行いません。内蔵 MCP サーバー（/mcp）経由で Claude Code / claude.ai に頼むか、API キー付き API（PUT /api/sources）で行います。
         </p>
+      </section>
+
+      <section>
+        <h2 className="group-header">認証</h2>
+        <div className="card">
+          <p>閲覧はパスワードでログインします。API と MCP はパスワードではなく <b>API キー</b>（read / write / manage / admin のスコープ付き）を使います。</p>
+          <p>鍵の発行・失効とパスワードの変更は <Link href="/settings">Settings</Link> から。ルーティン用は read,write、Claude Code 用は read,write,manage、claude.ai コネクタ用は read のみ、が目安です。</p>
+        </div>
       </section>
 
       {LINE_ADD_URL && (

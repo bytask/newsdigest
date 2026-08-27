@@ -17,7 +17,7 @@
 [通知  Slack / Discord / LINE 公式アカウント / 任意の Webhook]
 ```
 
-**v0.1.0 ・ AGPL-3.0 ・ TypeScript / Next.js 15 (OpenNext) / Cloudflare Workers + D1 / Claude Code skills**
+**v0.2.0 ・ AGPL-3.0 ・ TypeScript / Next.js 15 (OpenNext) / Cloudflare Workers + D1 / Claude Code skills**
 
 ---
 
@@ -31,6 +31,7 @@
 | 生データ | ❌ | ❌ | ✅ 要約前の全アイテムを保存・閲覧・MCP で検索 |
 | ソース棚卸し | ❌ | ❌ | ✅ 月次で低寄与ソースの pause / 入替を提案 |
 | AI との連携 | ❌ | ❌ | **MCP サーバー内蔵**。Claude Code / claude.ai から操作 |
+| 認証 | アカウント | アカウント | **パスワード + スコープ付き API キー**（Settings で発行・失効） |
 | 実行基盤 | — | — | **Claude Code ルーティン**（サーバー不要） |
 | 月額 | 0〜 | 数千円〜 | **0 円**（Claude サブスク＋任意の xAI 従量） |
 | ソースコード | 非公開 | 非公開 | **AGPL-3.0（このリポ）** |
@@ -66,14 +67,14 @@ claude
 
 あとは `/newsdigest-setup` スキルが進める:
 
-1. **コンソールをデプロイ** — `npm run setup` を非対話で実行（Cloudflare 認証 → D1 作成 → スキーマ → API キー生成 → デプロイ → ヘルスチェック）。ブラウザ操作が要るのは Cloudflare ログインだけ
-2. **MCP を登録** — `claude mcp add … newsdigest https://<worker>/mcp`
+1. **コンソールをデプロイ** — `npm run setup` を非対話で実行（Cloudflare 認証 → D1 作成 → スキーマ → デプロイ → ログインパスワード設定 → API キー 3 本発行）。ブラウザ操作が要るのは Cloudflare ログインだけ。パスワードはここで 1 回だけ表示される
+2. **MCP を登録** — `claude mcp add … newsdigest https://<worker>/mcp`（local 鍵）
 3. **ソースを設定** — 「何に関心があるか」「よく読む媒体は」を聞き、候補を探して MCP `add_source` で登録
 4. **分析方針を設定** — 言語・トピック数・コメントの観点・除外ルールを聞いて Markdown にし、MCP `set_digest_policy` で保存
-5. **claude.ai の環境変数**を案内（`NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY`。ここだけ利用者作業）
+5. **claude.ai の環境変数**を案内（`NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` = routine 鍵。ここだけ利用者作業）
 6. **ルーティン作成** — `/newsdigest-routine` がルーティン API（`RemoteTrigger`）で日次ルーティン（既定 07:15 JST）を作り、初回を手動実行して結果を確認
 
-翌朝から `https://<your-worker>.workers.dev/latest` にダイジェストが並ぶ。
+翌朝から `https://<your-worker>.workers.dev/latest` にダイジェストが並ぶ（閲覧はパスワードでログイン）。
 
 人間が手でやる手順は [docs/SETUP.md](docs/SETUP.md)。
 
@@ -88,7 +89,9 @@ Claude Code（MCP 経由）に話すだけ:
 > 「今日のダイジェスト見せて」「昨日の生データで Cloudflare に触れてるものは？」
 > 「ルーティンを 8 時にして」「最新の実行ログ見せて」
 
-claude.ai（Web / モバイル）からはカスタムコネクタ `https://<worker>/mcp/<key>` で同じことができる。詳細: [docs/MCP.md](docs/MCP.md)
+claude.ai（Web / モバイル）からはカスタムコネクタ `https://<worker>/mcp/<read 専用の鍵>` で閲覧・検索ができる。詳細: [docs/MCP.md](docs/MCP.md)
+
+鍵の追加発行・失効・パスワード変更はコンソールの **Settings**（`/settings`）から。
 
 ---
 
@@ -109,8 +112,13 @@ claude.ai（Web / モバイル）からはカスタムコネクタ `https://<wor
 - **通知** — Slack / Discord / LINE 公式アカウント / 任意 Webhook（`scripts/notify.sh`）
 - **LINE 連携（任意）** — トピック一覧カードの項目タップで詳細を返信する Webhook を同梱
 
+### 認証
+- **人はパスワード、機械はスコープ付き API キー**（`read / write / manage / admin`）。鍵はハッシュで保存、Settings 画面で発行・失効
+- ルーティンには `read,write` だけ渡す（外部コンテンツ経由のプロンプトインジェクションでもソース・方針を書き換えられない）
+- 閲覧 UI はパスワード + 30 日 Cookie。`PUBLIC_UI=1` で公開モードにも戻せる。詳細: [docs/AUTH.md](docs/AUTH.md)
+
 ### AI 統合
-- **MCP サーバー内蔵** — ソース 4 操作・分析方針 2 操作・ダイジェスト / 生データ取得 4 操作
+- **MCP サーバー内蔵** — ソース 4 操作・分析方針 2 操作・ダイジェスト / 生データ取得 4 操作。鍵のスコープ外のツールは見えない
 - 収集・要約・登録・通知の全手順は **Claude Code スキル**。ルーティンもローカル実行も同じスキル
 - ルーティンの作成・更新・実行・ログ確認は `/newsdigest-routine`
 
@@ -120,7 +128,7 @@ claude.ai（Web / モバイル）からはカスタムコネクタ `https://<wor
 
 ```
 newsdigest/
-├── apps/console/              Next.js 15 + OpenNext → Cloudflare Workers + D1（UI + REST API + MCP）
+├── apps/console/              Next.js 15 + OpenNext → Cloudflare Workers + D1（UI + REST API + MCP + 認証）
 ├── .claude/skills/
 │   ├── newsdigest-setup/          初期セットアップ（Claude Code 主導）
 │   ├── newsdigest/                日次収集・要約・登録・通知（ルーティンが実行）
@@ -142,6 +150,7 @@ newsdigest/
 ## ドキュメント
 
 - [セットアップ（手動手順）](docs/SETUP.md)
+- [認証（パスワード・API キー・スコープ）](docs/AUTH.md)
 - [ソースと分析方針の書き方（例つき）](docs/SOURCES-AND-POLICY.md)
 - [MCP サーバー](docs/MCP.md)
 - [ルーティン運用（作成・更新・デバッグ・コスト）](docs/ROUTINE.md)

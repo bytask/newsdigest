@@ -19,8 +19,10 @@
     }
   ],
   // 画面の表示名など（秘密でない設定）。secrets は `wrangler secret put <NAME>`:
-  //   NEWSDIGEST_API_KEY            … 必須。機械向けAPI（/api/*）の Bearer トークン
+  //   NEWSDIGEST_API_KEY       … 必須。ブートストラップ鍵（admin 相当）。セットアップと復旧にだけ使い、日常は Settings で発行した API キーを使う
+  //   SESSION_SECRET           … 推奨。UI セッション Cookie の署名鍵（未設定なら NEWSDIGEST_API_KEY から派生）
   //   LINE_CHANNEL_ID/SECRET   … 任意。LINE公式アカウントの Webhook（トピック詳細返信）を使う場合
+  // vars.PUBLIC_UI を "1" にすると閲覧 UI を認証なしで公開する（v0.1 の挙動）。/settings と /api/* は常に認証あり
   "vars": {
     "APP_NAME": "NewsDigest",
     "APP_TAGLINE": "ソースマスタ起点の日次インテリジェンス・ダイジェスト",

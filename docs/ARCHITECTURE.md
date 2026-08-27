@@ -22,8 +22,10 @@
 │  Next.js 15 (App Router) + OpenNext → 1 Worker                  │
 │  D1: sources / digests / raw_items / raw_failures / meta        │
 │  UI: /  /d/<name>  /raw  /raw/<date>  /sources  /about  /latest │
+│      /login  /settings（鍵の発行・失効、パスワード変更）           │
 │  API: /api/sources  /api/policy  /api/digests  /api/raw  /api/health  │
-│  MCP: /mcp（Bearer）  /mcp/<key>（claude.ai コネクタ用）         │
+│       /api/keys  /api/auth/*                                     │
+│  MCP: /mcp（Bearer）  /mcp/<read 鍵>（claude.ai コネクタ用）      │
 │  任意: /api/line/webhook（LINE トピック詳細返信）                 │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -43,7 +45,8 @@
 - **スキルが source of truth**。ルーティンもローカル手動実行も同じ `.claude/skills/` を読む。手順の改善は git push だけで次回実行から反映される
 - **ルーティンはステートレス**。毎回クリーンなサンドボックスで checkout → 実行 → 終了。状態はすべて D1 側
 - **ソースと分析方針は利用者が設定**。リポジトリは既定値を持たない（空で出荷）。設定は MCP（Claude Code / claude.ai）か REST
-- **秘密は 2 箇所だけ**。Worker secret（`NEWSDIGEST_API_KEY`、`LINE_CHANNEL_*`）と claude.ai 環境変数。リポジトリには入れない
+- **秘密は 2 箇所だけ**。Worker secret（`NEWSDIGEST_API_KEY` = ブートストラップ鍵、`SESSION_SECRET`、`LINE_CHANNEL_*`）と claude.ai 環境変数。リポジトリには入れない
+- **人はパスワード、機械はスコープ付き API キー**。鍵は D1 にハッシュで保存し、Settings 画面で発行・失効する（[AUTH.md](AUTH.md)）
 
 ## ルーティンの実体
 
@@ -59,14 +62,16 @@ Claude Code Web版の **routines**（https://claude.ai/code/routines）は、cro
 `apps/console/schema.sql` 参照。
 
 - `sources` — `(kind, value)` でユニーク。`kind`: `x_account`（value=handle）/ `x_trend`（value=query）/ `rss`（value=url, title=表示名）/ `release`（value=releases.atom URL, title=owner/name）。`status`: `active` | `paused`（削除ではなく pause で履歴を残す）
-- `meta` — `digest_policy`（分析方針 Markdown）、`review_cadence`、`review_last_reviewed`
+- `meta` — `digest_policy`（分析方針 Markdown）、`ui_password`（PBKDF2 ハッシュ）、`review_cadence`、`review_last_reviewed`
+- `api_keys` — スコープ付き API キー（`key_hash` のみ。`revoked_at` で失効、`last_used` を更新）。`login_attempts` はログインのレートリミット
 - `digests` — `name` が主キー。`YYYY-MM-DD`（日次）/ `reviews/YYYY-MM`（月次棚卸し、`kind=review`）/ `<ns>/<name>`（拡張用、一覧には出ない）。本文は Markdown のまま保存し、表示時に `marked` でレンダリング、```mermaid ブロックはクライアントで描画
 - `raw_items` / `raw_failures` — 要約前の全アイテムと失敗ソース。日付単位で全置換
 
-## API 認証
+## 認証
 
-- 機械向け `/api/*` は `Authorization: Bearer <NEWSDIGEST_API_KEY>`（`/api/health` と `/api/line/webhook` を除く）
-- 閲覧 UI は認証なし（ダイジェストは「共有されても安全な内容」を前提に生成する）。制限したい場合は Cloudflare Access（`docs/CUSTOMIZE.md`）
+- 機械向け `/api/*` と `/mcp` は `Authorization: Bearer <API キー>`（`/api/health` と `/api/line/webhook` を除く）。スコープは `read / write / manage / admin`
+- 閲覧 UI はパスワードログイン（HMAC 署名 Cookie、`middleware.ts`）。`vars.PUBLIC_UI="1"` で v0.1 と同じ公開モード
+- 詳細は [AUTH.md](AUTH.md)
 
 ## ディレクトリ
 
@@ -74,7 +79,9 @@ Claude Code Web版の **routines**（https://claude.ai/code/routines）は、cro
 apps/console/
   app/            Next.js App Router（ページ + route handlers）
   components/     Nav / Mermaid / icons
-  lib/            store.ts（D1）/ mcp.ts（MCP サーバー）/ auth.ts（Bearer）/ config.ts（表示名）/ format.ts
+  lib/            store.ts（D1）/ mcp.ts（MCP サーバー）/ auth.ts（鍵・パスワード・スコープ）/ session.ts（Cookie 署名）/ config.ts / format.ts
+  middleware.ts   閲覧 UI のログインゲート
+  components/     Nav / Mermaid / icons / Settings（鍵管理 UI）
   schema.sql      D1 スキーマ（冪等）
   wrangler.jsonc  Worker 設定（name / D1 binding / vars）
 .claude/skills/   newsdigest-setup / newsdigest / newsdigest-sources-review / newsdigest-routine

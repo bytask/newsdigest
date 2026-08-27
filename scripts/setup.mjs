@@ -6,17 +6,18 @@
 //   1. Node / wrangler の確認、Cloudflare 認証（wrangler login）
 //   2. Worker 名・表示名の設定（apps/console/wrangler.jsonc を書き換え）
 //   3. D1 作成 + schema.sql 適用
-//   4. NEWSDIGEST_API_KEY 生成 + Worker secret 登録
+//   4. ブートストラップ鍵（Worker secret NEWSDIGEST_API_KEY）と SESSION_SECRET の登録
 //   5. Worker デプロイ → URL 取得
-//   6. ヘルスチェック、.env.local 書き出し、MCP 登録コマンドと次の手順の案内
+//   6. ヘルスチェック、UI パスワードの初期設定、API キー（local / routine / claude-ai）の発行、.env.local 書き出し、次の手順の案内
 //
 // ソースと分析方針は投入しない（利用者が MCP / Claude Code で設定する）。--seed <file.json> で投入も可。
-// 何度実行してもよい（作成済みのものはスキップ）。
+// 何度実行してもよい（作成済みのものはスキップ。有効な鍵が .env.local にあれば再発行しない）。
 //
 // オプション:
 //   --yes                非対話（既定値で進める）
 //   --name <worker>      Worker 名（URL の一部）。既定 newsdigest
 //   --app-name <name>    画面の表示名。既定 NewsDigest
+//   --password <pw>      UI パスワード（未設定のときだけ使う。省略時はランダム生成して 1 回だけ表示）
 //   --seed <file.json>   ソースマスタを投入する（sources.template.json 形式）
 //   --skip-deploy        デプロイしない（.env.local の NEWSDIGEST_API_URL を使う）
 //   --json               最後に結果を 1 行 JSON で出す（Claude Code が読む用）
@@ -37,6 +38,7 @@ const YES = flag("--yes") || Boolean(opt("--name")) || !process.stdin.isTTY;
 const SKIP_DEPLOY = flag("--skip-deploy");
 const JSON_OUT = flag("--json");
 const SEED = opt("--seed");
+const PASSWORD_OPT = opt("--password");
 
 const c = { b: (s) => `\x1b[1m${s}\x1b[0m`, g: (s) => `\x1b[32m${s}\x1b[0m`, y: (s) => `\x1b[33m${s}\x1b[0m`, r: (s) => `\x1b[31m${s}\x1b[0m`, d: (s) => `\x1b[2m${s}\x1b[0m` };
 const step = (n, t) => console.log(`\n${c.b(`[${n}/6] ${t}`)}`);
@@ -129,18 +131,27 @@ if (!/^[0-9a-f-]{36}$/.test(dbId)) {
   ok("schema.sql を適用（冪等）");
 }
 
-// ── 4. API キー ──
-step(4, "API キー（NEWSDIGEST_API_KEY）");
+// ── 4. ブートストラップ鍵と SESSION_SECRET ──
+step(4, "ブートストラップ鍵（Worker secret NEWSDIGEST_API_KEY）と SESSION_SECRET");
 loadEnv();
-let apiKey = process.env.NEWSDIGEST_API_KEY || "";
-if (apiKey) ok(".env.local の NEWSDIGEST_API_KEY を再利用");
-else { apiKey = randomBytes(24).toString("hex"); ok("新しいキーを生成"); }
+// v0.2: Worker secret の NEWSDIGEST_API_KEY は「ブートストラップ鍵」（admin 相当、セットアップ・復旧専用）。
+// .env.local には NEWSDIGEST_BOOTSTRAP_KEY として控える。v0.1 の .env.local（NEWSDIGEST_API_KEY が nd_ で始まらない）はそれを引き継ぐ。
+const isApiKey = (k) => /^nd_[a-z0-9]{8}_[A-Za-z0-9_-]{43}$/.test(k || "");
+let bootstrap = process.env.NEWSDIGEST_BOOTSTRAP_KEY || (!isApiKey(process.env.NEWSDIGEST_API_KEY) ? process.env.NEWSDIGEST_API_KEY : "") || "";
+if (bootstrap) ok(".env.local のブートストラップ鍵を再利用");
+else { bootstrap = randomBytes(24).toString("hex"); ok("ブートストラップ鍵を生成"); }
+let sessionSecret = process.env.NEWSDIGEST_SESSION_SECRET || "";
+if (!sessionSecret) sessionSecret = randomBytes(32).toString("hex");
+const putSecrets = () => {
+  const r1 = wrangler(["secret", "put", "NEWSDIGEST_API_KEY", "--name", workerName], { input: bootstrap + "\n" });
+  if (r1.status !== 0) return false;
+  const r2 = wrangler(["secret", "put", "SESSION_SECRET", "--name", workerName], { input: sessionSecret + "\n" });
+  if (r2.status !== 0) warn("SESSION_SECRET の登録に失敗（NEWSDIGEST_API_KEY から派生した値で動作します）");
+  return true;
+};
 let secretPending = false;
-{
-  const r = wrangler(["secret", "put", "NEWSDIGEST_API_KEY", "--name", workerName], { input: apiKey + "\n" });
-  if (r.status !== 0) { warn("Worker 未作成のため secret はデプロイ後に登録します"); secretPending = true; }
-  else ok("Worker secret NEWSDIGEST_API_KEY を登録");
-}
+if (putSecrets()) ok("Worker secret NEWSDIGEST_API_KEY / SESSION_SECRET を登録");
+else { warn("Worker 未作成のため secret はデプロイ後に登録します"); secretPending = true; }
 
 // ── 5. デプロイ ──
 step(5, "デプロイ");
@@ -155,18 +166,17 @@ if (SKIP_DEPLOY) {
   url = m[0];
   ok(`デプロイ完了: ${url}`);
   if (secretPending) {
-    const r = wrangler(["secret", "put", "NEWSDIGEST_API_KEY", "--name", workerName], { input: apiKey + "\n" });
-    if (r.status !== 0) fail(`secret 登録に失敗:\n${r.out}`);
-    ok("Worker secret NEWSDIGEST_API_KEY を登録");
+    if (!putSecrets()) fail("secret 登録に失敗しました。`cd apps/console && npx wrangler secret put NEWSDIGEST_API_KEY` を手で実行してください");
+    ok("Worker secret NEWSDIGEST_API_KEY / SESSION_SECRET を登録");
   }
 }
 if (!url) fail("NEWSDIGEST_API_URL が不明です（--skip-deploy の場合は .env.local に NEWSDIGEST_API_URL を書いてください）");
 
-// ── 6. 仕上げ ──
-step(6, "ヘルスチェックと保存");
-const H = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
-async function api(method, p, body) {
-  const res = await fetch(url + p, { method, headers: H, body: body ? JSON.stringify(body) : undefined });
+// ── 6. 仕上げ: ヘルスチェック → パスワード → API キー → .env.local ──
+step(6, "ヘルスチェック・パスワード・API キー");
+const BH = { Authorization: `Bearer ${bootstrap}`, "Content-Type": "application/json" };
+async function api(method, p, body, headers = BH) {
+  const res = await fetch(url + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
 let health = null;
@@ -176,42 +186,90 @@ for (let i = 0; i < 6; i++) {
   await new Promise((r) => setTimeout(r, 5000)); // secret / デプロイ反映待ち
 }
 if (!health?.ok) fail(`ヘルスチェック失敗: ${JSON.stringify(health)}`);
-ok(`health ok (sources_active=${health.sources_active}, policy_configured=${health.policy_configured})`);
+ok(`health ok (sources_active=${health.sources_active}, policy_configured=${health.policy_configured}, ui=${health.ui})`);
 {
-  const s = await api("GET", "/api/sources");
-  if (s.status === 401) fail("API キーが一致しません。secret の反映に数十秒かかることがあります。少し待って再実行してください");
+  const s = await api("GET", "/api/auth/session");
+  if (s.status !== 200 || !s.json?.authenticated) fail("ブートストラップ鍵が一致しません。secret の反映に数十秒かかることがあります。少し待って再実行してください");
 }
+
+// UI パスワード（未設定のときだけ）
+let uiPassword = null;
+if (health.password_configured) {
+  ok("UI パスワードは設定済み（忘れた場合: node scripts/post.mjs password:set）");
+} else {
+  uiPassword = PASSWORD_OPT || (YES ? "" : await ask("UI のログインパスワード（空なら自動生成）", "")) || randomBytes(12).toString("base64url");
+  const r = await api("PUT", "/api/auth/password", { password: uiPassword });
+  if (r.status !== 200) fail(`パスワード設定に失敗 (HTTP ${r.status}) ${JSON.stringify(r.json)}`);
+  ok("UI パスワードを設定（この後 1 回だけ表示）");
+}
+
+// API キー: 有効な鍵が .env.local にあれば再利用、無ければ発行
+async function keyOk(key, needScopes) {
+  if (!isApiKey(key)) return false;
+  const r = await api("GET", "/api/auth/session", undefined, { Authorization: `Bearer ${key}` });
+  const have = new Set(r.json?.scopes ?? []);
+  return r.status === 200 && r.json?.authenticated && needScopes.every((s) => have.has(s));
+}
+async function ensureKey(envName, name, scopes) {
+  const cur = process.env[envName] || "";
+  if (await keyOk(cur, scopes)) { ok(`${name} 鍵は有効（再利用）`); return { key: cur, created: false }; }
+  const r = await api("POST", "/api/keys", { name, scopes });
+  if (r.status !== 200 || !r.json?.key) fail(`API キー発行に失敗 (${name}): HTTP ${r.status} ${JSON.stringify(r.json)}`);
+  ok(`${name} 鍵を発行 [${scopes.join(",")}]`);
+  return { key: r.json.key, created: true };
+}
+const localKey = await ensureKey("NEWSDIGEST_API_KEY", "local", ["read", "write", "manage", "admin"]);
+const routineKey = await ensureKey("NEWSDIGEST_ROUTINE_API_KEY", "routine", ["read", "write"]);
+const connectorKey = await ensureKey("NEWSDIGEST_CONNECTOR_API_KEY", "claude-ai", ["read"]);
+
 if (SEED) {
   const doc = JSON.parse(readFileSync(path.resolve(SEED), "utf8"));
-  const r = await api("PUT", "/api/sources", doc);
+  const r = await api("PUT", "/api/sources", doc, { Authorization: `Bearer ${localKey.key}`, "Content-Type": "application/json" });
   if (r.status !== 200) fail(`ソース投入に失敗 (HTTP ${r.status})`);
   ok(`${SEED} を投入`);
 }
 {
-  let env = existsSync(ENV_LOCAL) ? readFileSync(ENV_LOCAL, "utf8") : "# NewsDigest — ローカル用（gitignore 済み）。ルーティンには claude.ai の環境変数として同じ値を登録する\n";
+  let env = existsSync(ENV_LOCAL) ? readFileSync(ENV_LOCAL, "utf8") : "# NewsDigest — ローカル用（gitignore 済み）。ルーティンには NEWSDIGEST_ROUTINE_API_KEY の値を claude.ai の環境変数 NEWSDIGEST_API_KEY として登録する\n";
   const set = (k, v) => { env = new RegExp(`^${k}=`, "m").test(env) ? env.replace(new RegExp(`^${k}=.*$`, "m"), `${k}=${v}`) : env + `${k}=${v}\n`; };
-  set("NEWSDIGEST_API_URL", url); set("NEWSDIGEST_API_KEY", apiKey);
+  set("NEWSDIGEST_API_URL", url);
+  set("NEWSDIGEST_API_KEY", localKey.key);
+  set("NEWSDIGEST_ROUTINE_API_KEY", routineKey.key);
+  set("NEWSDIGEST_CONNECTOR_API_KEY", connectorKey.key);
+  set("NEWSDIGEST_BOOTSTRAP_KEY", bootstrap);
+  set("NEWSDIGEST_SESSION_SECRET", sessionSecret);
   writeFileSync(ENV_LOCAL, env);
-  ok(".env.local に NEWSDIGEST_API_URL / NEWSDIGEST_API_KEY を保存");
+  ok(".env.local に URL / 各 API キー / ブートストラップ鍵を保存");
 }
 rl?.close();
 
-const mcpAdd = `claude mcp add --transport http newsdigest ${url}/mcp --header "Authorization: Bearer ${apiKey}"`;
+const mcpAdd = `claude mcp add --transport http newsdigest ${url}/mcp --header "Authorization: Bearer ${localKey.key}"`;
+const connectorUrl = `${url}/mcp/${connectorKey.key}`;
 console.log(`
 ${c.b("完了。")} コンソール: ${c.g(url)}
+${uiPassword ? `  UI ログインパスワード: ${c.b(uiPassword)}   ${c.d("← 今だけ表示。Settings 画面で変更できます")}` : `  UI ログイン: 設定済みのパスワード（Settings 画面で変更可）`}
 
 ${c.b("次の手順")}
-  1. MCP をこの Claude Code に登録（ソース・分析方針の設定に使う）:
+  1. MCP をこの Claude Code に登録（ソース・分析方針の設定に使う。local 鍵 = read,write,manage,admin）:
        ${c.g(mcpAdd)}
-     ${c.d("claude.ai のカスタムコネクタからは " + url + "/mcp/<NEWSDIGEST_API_KEY>（URL 自体が秘密）")}
+     ${c.d("claude.ai のカスタムコネクタからは " + connectorUrl + "（read 専用の鍵。URL 自体が秘密）")}
   2. ソースと分析方針を設定する（MCP の add_source / set_digest_policy。書き方: docs/SOURCES-AND-POLICY.md）
-  3. https://claude.ai/code/environments の Environment variables に登録:
+  3. https://claude.ai/code/environments の Environment variables に登録（routine 鍵 = read,write）:
        NEWSDIGEST_API_URL=${url}
-       NEWSDIGEST_API_KEY=${apiKey}
+       NEWSDIGEST_API_KEY=${routineKey.key}
        ${c.d("（任意）XAI_API_KEY=…  NOTIFY_SLACK_WEBHOOK_URL=…  DIGEST_LANG=ja  DIGEST_TZ=Asia/Tokyo")}
      ${c.d("同じ画面でネットワークアクセスを確認: " + new URL(url).host + " / api.x.ai / 各 RSS ホストに到達できる設定にする")}
   4. Claude Code で ${c.g("/newsdigest-routine")} → ルーティン API 経由で日次ルーティンを作成・初回実行
 
+${c.d("鍵の一覧・失効・追加発行は " + url + "/settings（要ログイン）または node scripts/post.mjs keys / keys:add / keys:revoke。")}
 ${c.d("Claude Code に任せる場合は /newsdigest-setup が 1〜4 を順に進めます。")}
 `);
-if (JSON_OUT) console.log(JSON.stringify({ ok: true, url, worker: workerName, app_name: appName, api_key: apiKey, mcp_add_command: mcpAdd, mcp_url_with_token: `${url}/mcp/${apiKey}`, health }));
+if (JSON_OUT) console.log(JSON.stringify({
+  ok: true, url, worker: workerName, app_name: appName,
+  ui_password: uiPassword,                  // 新規設定時のみ。設定済みなら null
+  api_key: localKey.key,                    // local: read,write,manage,admin（.env.local / MCP 登録用）
+  routine_api_key: routineKey.key,          // routine: read,write（claude.ai 環境変数 NEWSDIGEST_API_KEY に）
+  connector_url: connectorUrl,              // claude-ai: read（claude.ai カスタムコネクタ URL）
+  mcp_add_command: mcpAdd,
+  settings_url: `${url}/settings`,
+  health,
+}));

@@ -4,7 +4,7 @@ import { ExternalArrow } from "@/components/icons";
 export const dynamic = "force-dynamic";
 
 // ソースマスタは読み取り専用ビュー。
-// 変更（追加・pause/resume・削除）は Bearer 認証付き API（PUT /api/sources）経由のみ（2026-08-08方針）。
+// 変更（追加・pause/resume・削除）は API キー（manage）付き API（PUT /api/sources）か MCP 経由のみ（2026-08-08方針）。
 
 function SourceRow(props: { main: string; href: string; note?: string; added?: string; status: string }) {
   const active = props.status === "active";
@@ -84,7 +84,7 @@ export default async function SourcesPage() {
 
       <p className="group-footer">
         このページは読み取り専用です。ソースの追加・一時停止・削除は内蔵 MCP（/mcp）経由で Claude Code / claude.ai に頼むか、
-        Bearer 認証付き API（PUT /api/sources）で行います。
+        API キー（manage スコープ）付き API（PUT /api/sources）で行います。
       </p>
     </>
   );

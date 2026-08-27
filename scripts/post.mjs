@@ -11,32 +11,45 @@
 //   node scripts/post.mjs digests                      GET  /api/digests → stdout(JSON)
 //   node scripts/post.mjs raw <file.json>              POST /api/raw（RawCollection）
 //   node scripts/post.mjs raw:get <date>               GET  /api/raw/<date>
+//   node scripts/post.mjs whoami                       GET  /api/auth/session（この鍵のスコープ）
+//   node scripts/post.mjs keys                         GET  /api/keys（admin）
+//   node scripts/post.mjs keys:add <name> <scopes> [YYYY-MM-DD]   POST /api/keys（admin）。scopes は read,write,manage,admin のカンマ区切り
+//   node scripts/post.mjs keys:revoke <id>             DELETE /api/keys/<id>（admin）
+//   node scripts/post.mjs password:set [password]      PUT  /api/auth/password（admin）。省略時はランダム生成して表示
 //
 // env: NEWSDIGEST_API_URL, NEWSDIGEST_API_KEY（.env.local / .env からも読む）
+//      admin 系（keys* / password:set）は NEWSDIGEST_ADMIN_API_KEY があればそれを優先し、無ければ NEWSDIGEST_API_KEY を使う
 import { readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { loadEnv, requireEnv } from "./env.mjs";
 
 const [cmd, a1, a2] = process.argv.slice(2);
 if (!cmd) {
-  console.error(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 15).join("\n"));
+  console.error(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 21).join("\n"));
   process.exit(1);
 }
 
 loadEnv();
 const base = (process.env.NEWSDIGEST_API_URL || "").replace(/\/+$/, "");
 
-async function call(method, p, body, { auth = true, text = false, raw = false } = {}) {
+async function call(method, p, body, { auth = true, text = false, raw = false, admin = false } = {}) {
   if (!base) requireEnv("NEWSDIGEST_API_URL");
   const headers = { "Content-Type": raw ? "text/markdown; charset=utf-8" : "application/json" };
   if (auth) {
-    const [key] = requireEnv("NEWSDIGEST_API_KEY");
+    const key = (admin && process.env.NEWSDIGEST_ADMIN_API_KEY) || requireEnv("NEWSDIGEST_API_KEY")[0];
     headers.Authorization = `Bearer ${key}`;
+  }
+  // 任意: Cloudflare Access を前に置いている場合の Service Token（docs/CUSTOMIZE.md）
+  if (process.env.CF_ACCESS_CLIENT_ID && process.env.CF_ACCESS_CLIENT_SECRET) {
+    headers["CF-Access-Client-Id"] = process.env.CF_ACCESS_CLIENT_ID;
+    headers["CF-Access-Client-Secret"] = process.env.CF_ACCESS_CLIENT_SECRET;
   }
   const res = await fetch(base + p, { method, headers, body: body === undefined ? undefined : raw ? body : JSON.stringify(body) });
   if (res.status === 204) return null;
   const out = text ? await res.text() : await res.text().then((t) => { try { return JSON.parse(t); } catch { return t; } });
   if (!res.ok) {
     console.error(`${method} ${p} → HTTP ${res.status}`, typeof out === "string" ? out.slice(0, 300) : JSON.stringify(out));
+    if (res.status === 403) console.error("hint: この鍵のスコープが足りません。Settings 画面か `keys:add` で必要なスコープの鍵を発行してください（admin 系は NEWSDIGEST_ADMIN_API_KEY でも可）");
     process.exit(1);
   }
   return out;
@@ -94,6 +107,29 @@ switch (cmd) {
   case "raw:get": {
     if (!a1) { console.error("usage: raw:get <date>"); process.exit(1); }
     console.log(JSON.stringify(await call("GET", `/api/raw/${a1}`), null, 2));
+    break;
+  }
+  case "whoami": console.log(JSON.stringify(await call("GET", "/api/auth/session"), null, 2)); break;
+  case "keys": console.log(JSON.stringify(await call("GET", "/api/keys", undefined, { admin: true }), null, 2)); break;
+  case "keys:add": {
+    if (!a1 || !a2) { console.error("usage: keys:add <name> <scopes: read,write,manage,admin> [YYYY-MM-DD]"); process.exit(1); }
+    const expires_at = process.argv[5] || null;
+    const r = await call("POST", "/api/keys", { name: a1, scopes: a2.split(","), expires_at }, { admin: true });
+    console.log(JSON.stringify(r, null, 2));
+    console.error("※ 平文の鍵はこの出力にしか出ません");
+    break;
+  }
+  case "keys:revoke": {
+    if (!a1) { console.error("usage: keys:revoke <id>"); process.exit(1); }
+    console.log(JSON.stringify(await call("DELETE", `/api/keys/${a1}`, undefined, { admin: true })));
+    break;
+  }
+  case "password:set": {
+    const pw = a1 || randomBytes(12).toString("base64url");
+    if (pw.length < 8) { console.error("password must be >= 8 chars"); process.exit(1); }
+    const r = await call("PUT", "/api/auth/password", { password: pw }, { admin: true });
+    console.log(JSON.stringify({ ...r, password: pw }));
+    console.error(`※ UI パスワード: ${pw}（この出力にしか出ません）`);
     break;
   }
   default:

@@ -428,3 +428,65 @@ article.digest img { max-width: 100%; }
 @media (prefers-contrast: more) {
   .list-group, article.digest { box-shadow: 0 0 0 1px var(--fg-tertiary); }
 }
+
+/* ============================================================
+   認証・設定フォーム（v0.2）
+   ============================================================ */
+.auth-screen {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; place-items: center; padding: 1rem;
+  background: var(--bg);
+}
+.auth-card { width: min(380px, 100%); padding: 1.6rem 1.5rem; }
+.auth-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; }
+.auth-sub { margin: 0.35rem 0 1.2rem; color: var(--fg-secondary); font-size: 0.88rem; }
+.auth-foot { margin: 0.9rem 0 0; color: var(--fg-tertiary); font-size: 0.76rem; line-height: 1.5; }
+
+.field { display: block; margin: 0 0 0.9rem; }
+.field > span { display: block; font-size: 0.78rem; font-weight: 600; color: var(--fg-secondary); margin-bottom: 0.35rem; }
+.input {
+  width: 100%; font: inherit; font-size: 0.95rem; color: var(--fg);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-s);
+  padding: 0.6rem 0.75rem; outline: none;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: inherit; font-size: 0.88rem; font-weight: 600; color: var(--fg);
+  background: var(--fill); border: none; border-radius: 99px;
+  padding: 0.5rem 1.1rem; cursor: pointer;
+  transition: transform 120ms ease-out, filter 120ms ease-out, background 120ms ease-out;
+}
+.btn:hover { filter: brightness(0.97); }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.danger { background: var(--red-soft); color: var(--red); }
+.btn.small { font-size: 0.76rem; padding: 0.3rem 0.75rem; }
+.btn.block { width: 100%; padding: 0.7rem 1rem; font-size: 0.95rem; }
+.row-trailing .btn + .btn { margin-left: 6px; }
+
+.form-error { margin: 0 0 0.9rem; color: var(--red); font-size: 0.84rem; }
+.form-ok { margin: 0 0 0.9rem; color: var(--green-text); font-size: 0.84rem; }
+.preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
+.checks { display: grid; gap: 6px; }
+.check { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px; font-size: 0.86rem; padding: 0.3rem 0; }
+.check b { font-family: var(--font-mono); font-weight: 600; }
+.check span { color: var(--fg-secondary); font-size: 0.8rem; }
+
+.key-reveal { border: 1px solid var(--accent); }
+.key-reveal-row { display: flex; align-items: center; gap: 8px; margin: 0.4rem 0 0.7rem; }
+.key-code {
+  flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 0.84rem; word-break: break-all;
+  background: var(--surface-2); border-radius: var(--radius-s); padding: 0.5rem 0.65rem;
+}
+.key-code.small { font-size: 0.74rem; }
+.key-hint { margin: 0.2rem 0; font-size: 0.82rem; color: var(--fg-secondary); }
+.key-id { font-family: var(--font-mono); font-size: 0.74rem; color: var(--fg-tertiary); margin-left: 6px; }
+.row-sub .tag { margin-right: 4px; }
+.tag.scope-write { color: var(--amber-text); background: var(--amber-soft); }
+.tag.scope-manage { color: var(--accent); background: var(--accent-soft); }
+.tag.scope-admin { color: var(--red); background: var(--red-soft); }
+.card form, form.card { margin: 0; }
+form.card .btn { margin-top: 0.2rem; }

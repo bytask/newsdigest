@@ -24,6 +24,8 @@ AI 実行（収集・要約・登録・通知）は **このリポジトリを�
 ## 実行環境の前提
 
 - 環境変数 `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` が必須。ルーティンでは claude.ai の環境設定から、ローカルでは `.env` / `.env.local` から供給される（`scripts/*.mjs` と `notify.sh` は `.env.local` → `.env` の順に自動で読む）
+- API キーはスコープ付き（`read / write / manage / admin`、`docs/AUTH.md`）。ルーティンは `read,write` の `routine` 鍵、ローカルは全スコープの `local` 鍵。403 が出たら鍵のスコープ不足なので、Settings（`/settings`）か `node scripts/post.mjs keys:add` で適切な鍵を発行する
+- 閲覧 UI はパスワードログイン。パスワードは `npm run setup` が 1 回だけ表示する。忘れたら `node scripts/post.mjs password:set`
 - ソースと分析方針はコンソール（D1）にある。MCP `newsdigest` が登録されていればそれで読み書きし、無ければ `scripts/post.mjs`（`sources` / `policy`）で読み書きする
 - `XAI_API_KEY` が無ければ X 系ソースをスキップして続行する（エラーにしない）
 - 通知先が未設定なら通知をスキップして続行する（エラーにしない）
@@ -36,3 +38,4 @@ AI 実行（収集・要約・登録・通知）は **このリポジトリを�
 - 分析方針に「共有チャネルに流れる」旨があれば、利用者固有の非公開情報をダイジェストに書かない
 - リポジトリへの commit/push は `DIGEST_COMMIT_LOGS=1` のときだけ、`digests/` 配下のみ（セットアップ時の `wrangler.jsonc` 変更は除く）
 - `.env.local` / `.mcp.json` にはキーが入る。commit しない（gitignore 済み）
+- API キーや UI パスワードをチャットや Issue に貼らない。`setup --json` の出力から必要な箇所だけ引用し、パスワードは利用者に 1 回伝えるだけにする

@@ -13,7 +13,7 @@ description: NewsDigest の日次ジョブ。コンソールのソースマス�
 
 | 変数 | 必須 | 用途 |
 |---|---|---|
-| `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` | ✅ | コンソール API。ルーティンでは claude.ai の環境変数、ローカルでは `.env.local` から（`scripts/*.mjs` / `notify.sh` が自動で読む。Bash から直接 `curl` する場合は `set -a; source .env.local; set +a`） |
+| `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` | ✅ | コンソール API。ルーティンでは claude.ai の環境変数（`routine` 鍵 = read,write）、ローカルでは `.env.local`（`local` 鍵）から（`scripts/*.mjs` / `notify.sh` が自動で読む。Bash から直接 `curl` する場合は `set -a; source .env.local; set +a`）。HTTP 403 は鍵のスコープ不足 |
 | `XAI_API_KEY` | – | X アカウント / X トレンド収集。未設定なら X 系をスキップして続行 |
 | `DIGEST_LANG` | – | `ja`（既定）/ `en`。分析方針に言語指定があればそちらが優先 |
 | `DIGEST_TZ` | – | 既定 `Asia/Tokyo`。日付判定に使う |
@@ -160,7 +160,7 @@ bash scripts/notify.sh "📡 Digest $TODAY
 
 ## ソース・分析方針の変更（利用者から頼まれたとき）
 
-MCP `newsdigest` が登録されていればそれを使う（`add_source` / `update_source` / `remove_source` / `set_digest_policy`）。無ければ REST:
+MCP `newsdigest` が登録されていればそれを使う（`add_source` / `update_source` / `remove_source` / `set_digest_policy`。`manage` スコープの鍵が必要）。無ければ REST（同じく `manage`）:
 
 1. `node scripts/post.mjs sources > .work/sources.json` → 編集（追加は `status: active`、外すのは `status: paused`）→ `node scripts/post.mjs sources:put .work/sources.json`
 2. `node scripts/post.mjs policy > .work/policy.md` → 編集 → `node scripts/post.mjs policy:put .work/policy.md`

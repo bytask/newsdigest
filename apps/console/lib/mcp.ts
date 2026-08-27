@@ -1,10 +1,12 @@
 // NewsDigest MCP サーバー（Streamable HTTP、ステートレス、依存ゼロ）。
 // Claude Code / claude.ai から「ソースの追加・削除・pause」「ダイジェスト取得」「生データ取得」「分析方針の読み書き」を行う。
-// エンドポイント: POST /mcp（Bearer NEWSDIGEST_API_KEY） / POST /mcp/<NEWSDIGEST_API_KEY>（claude.ai コネクタ用・ヘッダ不要）
+// エンドポイント: POST /mcp（Authorization: Bearer <API キー>） / POST /mcp/<read 専用 API キー>（claude.ai コネクタ用・ヘッダ不要）
+// 認証は app/mcp/*/route.ts が lib/auth.ts の authenticate() で行い、Principal を渡す。
 import {
   addSource, getDigest, getLatestDigestName, getPolicy, getRaw, getSources, listDigests, listRaw,
   removeSource, setPolicy, updateSource, SOURCE_KINDS, type SourceKind,
 } from "./store";
+import type { Principal, Scope } from "./auth";
 
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
@@ -85,6 +87,12 @@ export const TOOLS = [
   },
 ];
 
+// ツールごとに必要なスコープ。tools/list はこの表で権限外のツールを隠す
+export const TOOL_SCOPES: Record<string, Scope> = {
+  list_sources: "read", get_digest_policy: "read", list_digests: "read", get_digest: "read", list_raw_dates: "read", get_raw_items: "read",
+  add_source: "manage", update_source: "manage", remove_source: "manage", set_digest_policy: "manage",
+};
+
 async function callTool(name: string, a: Record<string, unknown>): Promise<ToolResult> {
   const s = (k: string) => (typeof a[k] === "string" ? (a[k] as string) : undefined);
   switch (name) {
@@ -143,7 +151,7 @@ async function callTool(name: string, a: Record<string, unknown>): Promise<ToolR
 const rpcError = (id: JsonRpcReq["id"], code: number, message: string) =>
   ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
-export async function handleMcp(req: Request): Promise<Response> {
+export async function handleMcp(req: Request, principal: Principal): Promise<Response> {
   if (req.method === "GET") return new Response("SSE stream not supported; use POST", { status: 405, headers: { Allow: "POST, DELETE" } });
   if (req.method === "DELETE") return new Response(null, { status: 200 });
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -165,17 +173,18 @@ export async function handleMcp(req: Request): Promise<Response> {
           result = {
             protocolVersion: PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSIONS[0],
             capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "newsdigest", version: "0.1.0" },
-            instructions: "NewsDigest: ソースマスタ（X/RSS/OSSリリース）と分析方針の管理、日次ダイジェストと生データの取得ができます。ソースは削除より update_source で paused にするのが基本です。",
+            serverInfo: { name: "newsdigest", version: "0.2.0" },
+            instructions: `NewsDigest: ソースマスタ（X/RSS/OSSリリース）と分析方針の管理、日次ダイジェストと生データの取得ができます。ソースは削除より update_source で paused にするのが基本です。この鍵（${principal.name}）のスコープ: ${[...principal.scopes].join(", ")}。`,
           };
           break;
         }
         case "ping": result = {}; break;
-        case "tools/list": result = { tools: TOOLS }; break;
+        case "tools/list": result = { tools: TOOLS.filter((t) => principal.scopes.has(TOOL_SCOPES[t.name])) }; break;
         case "tools/call": {
           const name = m.params?.name as string;
           const args = (m.params?.arguments as Record<string, unknown>) ?? {};
           if (!TOOLS.some((t) => t.name === name)) { responses.push(rpcError(m.id, -32602, `unknown tool: ${name}`)); continue; }
+          if (!principal.scopes.has(TOOL_SCOPES[name])) { responses.push(rpcError(m.id, -32003, `scope '${TOOL_SCOPES[name]}' required for ${name} (key '${principal.name}' has: ${[...principal.scopes].join(", ") || "none"})`)); continue; }
           try { result = await callTool(name, args); }
           catch (e) { result = text(`error: ${e instanceof Error ? e.message : String(e)}`, true); }
           break;
@@ -198,20 +207,4 @@ export async function handleMcp(req: Request): Promise<Response> {
   }
   if (responses.length === 0) return new Response(null, { status: 202 });
   return Response.json(Array.isArray(body) ? responses : responses[0]);
-}
-
-// 認証: Authorization: Bearer <NEWSDIGEST_API_KEY>、または URL パスのトークン（claude.ai コネクタ用）
-export function mcpAuthorized(req: Request, pathToken?: string): boolean {
-  const key = process.env.NEWSDIGEST_API_KEY;
-  if (!key) return false;
-  if (pathToken) return timingSafeEqual(pathToken, key);
-  const auth = req.headers.get("authorization") ?? "";
-  return auth.startsWith("Bearer ") && timingSafeEqual(auth.slice(7).trim(), key);
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
 }

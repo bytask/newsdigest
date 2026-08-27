@@ -16,7 +16,7 @@ description: NewsDigest の Claude Code ルーティン（Web版・クラウド�
 5. 利用者に以下を確認する（既定値で進めてよい）:
    - 実行時刻（既定 **07:15 JST** = cron `15 22 * * *` UTC）。cron は UTC。利用者のローカル時刻から変換して両方を提示する。最小間隔は 1 時間
    - モデル（既定 `claude-sonnet-5`。品質優先なら `claude-opus-5`）
-   - 環境変数 `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` を claude.ai の環境設定に登録済みか（未登録なら登録を促す。**ルーティンはローカルの `.env.local` を読めない**）
+   - 環境変数 `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` を claude.ai の環境設定に登録済みか（未登録なら登録を促す。**ルーティンはローカルの `.env.local` を読めない**）。値は **`routine` 鍵（read,write）** = `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`。無ければ `node scripts/post.mjs keys:add routine read,write` で発行する
 
 ## 作成（create）
 
@@ -62,7 +62,8 @@ description: NewsDigest の Claude Code ルーティン（Web版・クラウド�
 |---|---|---|
 | `missing env: NEWSDIGEST_API_URL` | 環境変数未登録 | claude.ai の環境設定に登録（Environment variables） |
 | health が到達不能 / fetch failed | 環境のネットワーク制限 | 環境設定でコンソールのホスト（`*.workers.dev`）・`api.x.ai`・RSS ホストへのアクセスを許可、または制限なしにする |
-| HTTP 401 | キー不一致 | Worker secret と環境変数の `NEWSDIGEST_API_KEY` を揃える |
+| HTTP 401 | 鍵が無効（失効・期限切れ・貼り間違い） | `keys:add routine read,write` で再発行し環境変数を差し替え |
+| HTTP 403 `scope 'write' required` | 鍵のスコープ不足 | ルーティンには read,write の鍵を使う |
 | 「分析方針が未設定」で終了 | policy 未設定 | MCP `set_digest_policy` か `/newsdigest-setup` Phase 5 |
 | X 系が全部スキップ | `XAI_API_KEY` 未設定 | 意図どおり（RSS のみ運用）。使うなら環境変数に追加 |
 | 通知が来ない | `NOTIFY_*` 未設定 | 任意機能。`docs/NOTIFICATIONS.md` |

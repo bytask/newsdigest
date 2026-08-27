@@ -33,27 +33,38 @@ npm run setup -- --yes --name mydigest --app-name "My Digest" --json   # 非対�
 1. **Cloudflare 認証** — 未認証ならブラウザが開く（`wrangler login`）
 2. **Worker 名 / 表示名** — Worker 名が URL になる（`https://<name>.<your-subdomain>.workers.dev`）
 3. **D1** — `wrangler d1 create` → `schema.sql`。`apps/console/wrangler.jsonc` に database_id が書き込まれる（秘密ではないので commit してよい）
-4. **API キー** — ランダム生成して Worker secret `NEWSDIGEST_API_KEY` に登録
+4. **ブートストラップ鍵と SESSION_SECRET** — ランダム生成して Worker secret `NEWSDIGEST_API_KEY`（admin 相当、セットアップ・復旧専用）と `SESSION_SECRET`（Cookie 署名）に登録
 5. **デプロイ** — `opennextjs-cloudflare build && deploy`
-6. **ヘルスチェック** — `GET /api/health` が `ok: true`。`.env.local` に `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY` を保存（gitignore 済み）。最後に MCP 登録コマンドと次の手順を表示
+6. **ヘルスチェック → パスワード → API キー** — `GET /api/health` が `ok: true` になったら、UI のログインパスワードを設定（`--password` で指定、省略時はランダム生成して **1 回だけ表示**）し、API キーを 3 本発行:
 
-ソースと分析方針は **投入しない**（空のまま）。`--seed sources.json` で一括投入もできる。
+   | name | scopes | 用途 |
+   |---|---|---|
+   | `local` | read, write, manage, admin | `.env.local` の `NEWSDIGEST_API_KEY`。`post.mjs` と Claude Code の MCP 登録に |
+   | `routine` | read, write | claude.ai の環境変数 `NEWSDIGEST_API_KEY` に貼る（`.env.local` には `NEWSDIGEST_ROUTINE_API_KEY`） |
+   | `claude-ai` | read | claude.ai カスタムコネクタの URL に |
 
-手動でやる場合は `apps/console/` で `npx wrangler d1 create <name>` → `wrangler.jsonc` 編集 → `npm run db:schema:remote` → `npx wrangler secret put NEWSDIGEST_API_KEY` → `npm run deploy`。
+   `.env.local`（gitignore 済み）に URL・各鍵・ブートストラップ鍵を保存し、MCP 登録コマンドと次の手順を表示
+
+ソースと分析方針は **投入しない**（空のまま）。`--seed sources.json` で一括投入もできる。認証の全体像は [AUTH.md](AUTH.md)。
+
+手動でやる場合は `apps/console/` で `npx wrangler d1 create <name>` → `wrangler.jsonc` 編集 → `npm run db:schema:remote` → `npx wrangler secret put NEWSDIGEST_API_KEY` / `SESSION_SECRET` → `npm run deploy` → ブートストラップ鍵で `node scripts/post.mjs password:set` と `keys:add`。
 
 ### 動作確認
 
 ```bash
-node scripts/post.mjs health     # {"ok":true,"sources_active":0,"policy_configured":false,...}
+node scripts/post.mjs health     # {"ok":true,"sources_active":0,"policy_configured":false,"password_configured":true,"api_keys_active":3,"ui":"protected",...}
+node scripts/post.mjs whoami     # {"authenticated":true,"name":"local","scopes":["read","write","manage","admin"],...}
 ```
+
+ブラウザで `https://<worker>.workers.dev` を開くとログイン画面。セットアップが表示したパスワードでログインする。鍵の一覧・追加発行・失効・パスワード変更は `/settings`。
 
 ## 3. MCP を登録
 
 ```bash
-claude mcp add --transport http newsdigest https://<worker>/mcp --header "Authorization: Bearer <key>"
+claude mcp add --transport http newsdigest https://<worker>/mcp --header "Authorization: Bearer <local 鍵>"
 ```
 
-以降、Claude Code に「ソース一覧見せて」で `list_sources` が呼ばれる。claude.ai からは `https://<worker>/mcp/<key>` をカスタムコネクタに（[docs/MCP.md](MCP.md)）。
+以降、Claude Code に「ソース一覧見せて」で `list_sources` が呼ばれる。claude.ai からは `https://<worker>/mcp/<claude-ai 鍵>`（read 専用）をカスタムコネクタに（[docs/MCP.md](MCP.md)）。
 
 ## 4. ソースを設定
 
@@ -79,8 +90,10 @@ https://claude.ai/code/environments で使う環境（既定 "Default"）を開�
 
 ```
 NEWSDIGEST_API_URL=https://<worker>.workers.dev
-NEWSDIGEST_API_KEY=<.env.local の値>
+NEWSDIGEST_API_KEY=<routine 鍵 = .env.local の NEWSDIGEST_ROUTINE_API_KEY の値>
 ```
+
+ルーティンには `read,write` の鍵だけを渡す（ローカルの `NEWSDIGEST_API_KEY` = local 鍵は admin まで持つので貼らない）。
 
 任意:
 
@@ -113,7 +126,8 @@ Claude Code で:
 
 ## 8. 日々の使い方
 
-- **読む**: `https://<worker>.workers.dev`（最新は `/latest`）。モバイル対応
+- **読む**: `https://<worker>.workers.dev`（最新は `/latest`）。パスワードでログイン（30 日有効）。モバイル対応
+- **鍵の管理**: `/settings` で発行・失効・パスワード変更。CLI なら `node scripts/post.mjs keys` / `keys:add` / `keys:revoke` / `password:set`
 - **ソース・分析方針を変える**: Claude Code / claude.ai に話す（MCP）。次の朝から反映
 - **今すぐ 1 回回す**: `/newsdigest-routine` で「今すぐ実行して」、またはローカルで `claude "/newsdigest"`（`.env.local` を読む）
 - **失敗したとき**: `/newsdigest-routine` で「最新の実行ログを見せて」→ [docs/ROUTINE.md](ROUTINE.md) の対処表
@@ -125,7 +139,9 @@ fork の "Sync fork" か:
 ```bash
 git remote add upstream https://github.com/bytask/newsdigest.git
 git fetch upstream && git merge upstream/main
-npm run console:deploy     # コンソールに変更があった場合
+npm run setup -- --yes     # スキーマ変更や新しい secret があっても冪等に追随する（コンソールだけなら npm run console:deploy でも可）
 ```
+
+v0.1 → v0.2（認証追加）の移行手順は [AUTH.md](AUTH.md#v01-からの移行)。
 
 スキル・スクリプトの変更はルーティンが次回チェックアウトで拾う。`routine/*.prompt.md` を変えた場合だけ `/newsdigest-routine` で「プロンプトを更新して」。

@@ -49,3 +49,24 @@ CREATE INDEX IF NOT EXISTS raw_failures_date ON raw_failures (date);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 INSERT OR IGNORE INTO meta (key, value) VALUES ('review_cadence', 'monthly');
 INSERT OR IGNORE INTO meta (key, value) VALUES ('review_last_reviewed', '');
+
+-- API キー（スコープ付き）。平文は保存しない（SHA-256 ハッシュのみ）。
+-- scopes: read / write / manage / admin のカンマ区切り。revoked_at が入ったら無効（行は履歴として残す）。
+CREATE TABLE IF NOT EXISTS api_keys (
+  id          TEXT PRIMARY KEY,           -- 鍵の公開 ID（nd_<id>_... の <id> 部分）
+  name        TEXT NOT NULL,              -- 用途名（local / routine / claude-ai など）
+  key_hash    TEXT NOT NULL,              -- SHA-256(鍵全体) hex
+  scopes      TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT,                       -- NULL = 無期限
+  last_used   TEXT,
+  revoked_at  TEXT
+);
+
+-- ログイン試行（/api/auth/login のレートリミット用。10 分窓）
+CREATE TABLE IF NOT EXISTS login_attempts (
+  ip           TEXT NOT NULL,
+  window_start TEXT NOT NULL,
+  count        INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (ip, window_start)
+);

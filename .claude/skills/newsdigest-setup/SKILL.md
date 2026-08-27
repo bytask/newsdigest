@@ -32,18 +32,21 @@ ls .env.local 2>/dev/null && echo "setup済みの可能性"
    ```bash
    npm run setup -- --yes --name <worker> --app-name "<表示名>" --json 2>&1 | tee .work/setup.log
    ```
-   最後の行の JSON（`url` / `api_key` / `mcp_add_command`）を控える。失敗したらログの `✖` 行を読み、対処して再実行（冪等）
-4. `node scripts/post.mjs health` が `ok: true` になったことを確認
+   最後の行の JSON を控える: `url` / `ui_password`（初回のみ。設定済みなら null）/ `api_key`（local 鍵 = read,write,manage,admin）/ `routine_api_key`（read,write）/ `connector_url`（claude.ai 用、read）/ `mcp_add_command` / `settings_url`。失敗したらログの `✖` 行を読み、対処して再実行（冪等）
+4. `node scripts/post.mjs health` が `ok: true`、`node scripts/post.mjs whoami` が `local` 鍵を返すことを確認
+5. **`ui_password` が非 null なら、利用者にコンソール URL と一緒に 1 回だけ伝える**（「Settings 画面で変更できます」「忘れたら `node scripts/post.mjs password:set`」を添える）。チャットに繰り返し貼らない
 
 ## Phase 3: MCP を登録
 
 Phase 2 の `mcp_add_command` をそのまま実行する:
 
 ```bash
-claude mcp add --transport http newsdigest <url>/mcp --header "Authorization: Bearer <key>"
+claude mcp add --transport http newsdigest <url>/mcp --header "Authorization: Bearer <local 鍵>"
 ```
 
 登録後、`ToolSearch` で `mcp__newsdigest__list_sources` を読み込み、呼べることを確認する（0 件で正常）。MCP が使えない環境（ツールが見つからない）なら、以降の設定は `scripts/post.mjs`（`sources:put` / `policy:put`）で代替する。
+
+claude.ai（Web / モバイル）からも使いたいと言われたら `connector_url`（read 専用の鍵入り URL）をカスタムコネクタに登録するよう案内する。
 
 ## Phase 4: ソースを設定（聞き取り → 登録）
 
@@ -75,7 +78,7 @@ claude mcp add --transport http newsdigest <url>/mcp --header "Authorization: Be
 
 > https://claude.ai/code/environments で使う環境（既定 Default）を開き、Environment variables に以下を追加してください:
 > - `NEWSDIGEST_API_URL` = `<url>`
-> - `NEWSDIGEST_API_KEY` = `.env.local` の値
+> - `NEWSDIGEST_API_KEY` = **`routine` 鍵**（`.env.local` の `NEWSDIGEST_ROUTINE_API_KEY` の値。read,write のみ。ローカルの `NEWSDIGEST_API_KEY` ではない）
 > - （任意）`XAI_API_KEY`、`NOTIFY_SLACK_WEBHOOK_URL` など（`.env.example` 参照）
 >
 > 同じ画面でネットワーク設定を確認し、`<url のホスト>`・`api.x.ai`・登録した RSS のホストへ到達できるようにしてください。
@@ -86,7 +89,7 @@ claude mcp add --transport http newsdigest <url>/mcp --header "Authorization: Be
 
 1. `git status` で変更（`apps/console/wrangler.jsonc` の name / database_id）を確認し、commit → push（`.env.local` は gitignore 済みであることを `git status` で再確認）
 2. `/newsdigest-routine` を実行（このスキルの続きとして同じセッションで進めてよい）。作成後に初回を手動実行し、`node scripts/post.mjs digests` に今日の名前が出るまで確認する
-3. 完了報告: コンソール URL、`/latest`、次回実行時刻、MCP の使い方（「ソースに ○○ を追加して」「今日のダイジェスト見せて」）を利用者に伝える
+3. 完了報告: コンソール URL（ログインはセットアップ時に伝えたパスワード）、`/latest`、`/settings`（鍵の管理）、次回実行時刻、MCP の使い方（「ソースに ○○ を追加して」「今日のダイジェスト見せて」）を利用者に伝える
 
 ## トラブル時
 

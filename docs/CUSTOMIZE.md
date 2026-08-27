@@ -41,12 +41,23 @@
 
 配色・レイアウトは `apps/console/app/globals.css`（Apple HIG 風、ライト/ダーク対応）。
 
-## 閲覧を制限する
+## 認証まわり
 
-コンソールの UI は認証なし。限定公開にするなら:
+既定で閲覧 UI はパスワードログイン、API / MCP はスコープ付き API キー（[AUTH.md](AUTH.md)）。
 
-- **Cloudflare Access**（推奨・無料枠 50 ユーザー）: Zero Trust → Access → Applications で `<your-worker>.workers.dev` を保護。メール OTP や Google ログインを許可。**`/api/*` はバイパスポリシー**にしてルーティンの Bearer アクセスを通す
-- 独自ドメイン: `wrangler.jsonc` に `routes` を追加（Cloudflare 管理のゾーンが必要）
+- **公開モードに戻す**: `wrangler.jsonc` の `vars` に `"PUBLIC_UI": "1"`。`/settings` と `/api/*`・`/mcp` は引き続き認証あり
+- **セッション期間**: `apps/console/lib/session.ts` の `SESSION_MAX_AGE`（既定 30 日）
+- **パスワードのハッシュ強度**: `lib/auth.ts` の `PBKDF2_ITERATIONS`（既定 60,000。Workers 無料枠の CPU 10ms に収まる値。有料プランなら 600,000 まで上げてよい）
+- **ログインのレートリミット**: `lib/store.ts` の `allowLoginAttempt`（既定 10 回 / 10 分 / IP）。Cloudflare の WAF Rate Limiting ルール（無料枠 1 本）を `/api/auth/login` に併用するとさらに堅い
+
+### Cloudflare Access を前に置く（任意）
+
+組織の SSO で守りたい場合。Workers ダッシュボード → 対象 Worker → Settings → Domains & Routes → `workers.dev` の **Enable Cloudflare Access**（Worker ごとに `<name> - Production` ポリシーが作られる）。
+
+- 人: Allow（メール OTP / Google など）
+- 機械: **Service Auth** ポリシー + Service Token。ルーティンや Claude Code は `CF-Access-Client-Id` / `CF-Access-Client-Secret` ヘッダを付ける（`claude mcp add --header` で 2 つ渡せる。`scripts/post.mjs` は `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` 環境変数があれば自動で付与）
+- claude.ai カスタムコネクタはヘッダを送れない → `/mcp/*` を Bypass にする（パス鍵 = read 専用なので露出は閲覧に限られる）
+- 独自ドメインで使うなら `wrangler.jsonc` に `routes` を追加（Cloudflare 管理のゾーンが必要）
 
 ## ルーティン以外で動かす
 
