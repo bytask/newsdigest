@@ -114,7 +114,7 @@ if (!/^[0-9a-f-]{36}$/.test(dbId)) {
     dbId = found.uuid; ok(`既存の D1 "${dbName}" を使います (${dbId})`);
   } else {
     const r = wrangler(["d1", "create", dbName]);
-    const m = r.out.match(/database_id\s*[:=]\s*"?([0-9a-f-]{36})/);
+    const m = r.out.match(/database_id"?\s*[:=]\s*"?([0-9a-f-]{36})/);
     if (r.status !== 0 || !m) fail(`D1 作成に失敗:\n${r.out}`);
     dbId = m[1]; ok(`D1 "${dbName}" を作成 (${dbId})`);
   }
