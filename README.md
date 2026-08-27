@@ -74,7 +74,7 @@ claude
 5. **任意設定** — X 収集（xAI キー）や通知先が要るかを聞く
 6. **ルーティン作成** — `/newsdigest-routine` がルーティン API（`RemoteTrigger`）で日次ルーティン（既定 07:15 JST）を作り、初回を手動実行して結果を確認。認証情報はルーティンに埋め込むので claude.ai 側の設定作業は不要
 
-利用者の手作業は **Cloudflare ログイン（初回 1 回）だけ**。GitHub の fork も `gh` があれば Claude Code が代行する。
+利用者の手作業は **Cloudflare ログイン（初回 1 回）** と、claude.ai の環境がネットワーク制限つきなら **許可ホストの追加**（`node scripts/routine.mjs hosts` が一覧を出す）だけ。GitHub の fork も `gh` があれば Claude Code が代行する。
 
 翌朝から `https://<your-worker>.workers.dev/latest` にダイジェストが並ぶ（閲覧はパスワードでログイン）。
 

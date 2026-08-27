@@ -52,7 +52,8 @@ async function call(method, p, body, { auth = true, text = false, raw = false, a
   const out = text ? await res.text() : await res.text().then((t) => { try { return JSON.parse(t); } catch { return t; } });
   if (!res.ok) {
     console.error(`${method} ${p} → HTTP ${res.status}`, typeof out === "string" ? out.slice(0, 300) : JSON.stringify(out));
-    if (res.status === 403) console.error("hint: この鍵のスコープが足りません。Settings 画面か `keys:add` で必要なスコープの鍵を発行してください（admin 系は NEWSDIGEST_ADMIN_API_KEY でも可）");
+    if (res.status === 403 && typeof out === "object" && /scope/.test(out?.error ?? "")) console.error("hint: この鍵のスコープが足りません。Settings 画面か `keys:add` で必要なスコープの鍵を発行してください（admin 系は NEWSDIGEST_ADMIN_API_KEY でも可）");
+    else if (/not in allowlist|CONNECT tunnel|egress/i.test(typeof out === "string" ? out : JSON.stringify(out))) console.error("hint: 実行環境のネットワーク制限です。claude.ai の環境設定（Network access）で `node scripts/routine.mjs hosts` が出すホストを許可してください");
     process.exit(1);
   }
   return out;

@@ -9,7 +9,7 @@ description: NewsDigest の初期セットアップを Claude Code が代行す�
 
 進め方の原則:
 - 各フェーズの冒頭で「これから何をするか・利用者に何を聞くか」を 1〜2 行で伝える
-- 利用者の手作業は **Cloudflare ログイン（`wrangler login`、初回 1 回）だけ**にする。GitHub の fork / push は `gh` で代行し、ルーティンの認証情報はプロンプトに埋め込む（`embed` モード）ので claude.ai 側の設定作業は不要。ブラウザ操作が避けられない箇所は利用者に依頼して待つ（代行しようとしない）
+- 利用者の手作業は **Cloudflare ログイン（`wrangler login`、初回 1 回）** と、claude.ai の環境が egress 制限つきの場合の **ネットワーク許可リストへのホスト追加** の 2 つだけにする。GitHub の fork / push は `gh` で代行し、ルーティンの認証情報はプロンプトに埋め込む（`embed` モード）。ブラウザ操作が避けられない箇所は利用者に依頼して待つ（代行しようとしない）
 - 秘密（API キー）はチャットに繰り返し貼らない。`.env.local` と `setup --json` の出力から必要な箇所だけ引用する
 
 ## Phase 1: 前提確認
@@ -88,7 +88,7 @@ claude.ai（Web / モバイル）からも使いたいと言われたら `connec
 ## Phase 7: GitHub に push → ルーティン作成（ゼロタッチ）
 
 1. `git status` で変更（`apps/console/wrangler.jsonc` の name / database_id）を確認し、commit → push（`.env.local` は gitignore 済みであることを `git status` で再確認）
-2. `/newsdigest-routine` を実行（このスキルの続きとして同じセッションで進めてよい）。既定の `embed` モードで `node scripts/routine.mjs body --env-id <環境 ID>` → `RemoteTrigger create` → 初回を `run` → `list_runs` / `get_run_log` → `node scripts/post.mjs digests` に今日の名前が出るまで確認する。環境 ID は `RemoteTrigger list` の既存ルーティンから拾い、無ければ `/schedule` の一覧から "Default" を選ぶ
+2. `/newsdigest-routine` を実行（このスキルの続きとして同じセッションで進めてよい）。既定の `embed` モードで `node scripts/routine.mjs body --env-id <環境 ID>` → `RemoteTrigger create` → 初回を `run` → `list_runs` / `get_run_log` → `node scripts/post.mjs digests` に今日の名前が出るまで確認する。環境 ID は `RemoteTrigger list` の既存ルーティンから拾い、無ければ `/schedule` の一覧から "Default" を選ぶ。初回ログが `Host not in allowlist` なら `node scripts/routine.mjs hosts` の一覧を環境の Network access に追加するよう利用者に依頼し、追加後に再実行する
 3. 完了報告: コンソール URL（ログインはセットアップ時に伝えたパスワード）、`/latest`、`/settings`（鍵の管理）、ルーティンの URL と次回実行時刻、MCP の使い方（「ソースに ○○ を追加して」「今日のダイジェスト見せて」）を利用者に伝える。鍵はチャットに貼らない
 
 ## トラブル時

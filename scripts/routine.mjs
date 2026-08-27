@@ -5,6 +5,7 @@
 //   node scripts/routine.mjs body [options]        create 用 body（JSON）を stdout に
 //   node scripts/routine.mjs body --job-config-only  update 用（job_config だけ）
 //   node scripts/routine.mjs body --redact          鍵を伏せて表示（利用者に見せる用）
+//   node scripts/routine.mjs hosts                  ルーティンの実行環境で許可が必要なホスト一覧（コンソール・RSS・GitHub・api.x.ai）
 //
 // options:
 //   --mode embed|env     embed（既定）: 認証情報をプロンプトに埋め込み、ルーティンが .env を作って動く（ゼロタッチ）
@@ -28,7 +29,8 @@ const cmd = args[0];
 const flag = (n) => args.includes(n);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : d; };
 const die = (m) => { console.error(`routine.mjs: ${m}`); process.exit(1); };
-if (cmd !== "body") { console.error(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 20).join("\n")); process.exit(1); }
+if (cmd === "hosts") { await printHosts(); process.exit(0); }
+if (cmd !== "body") { console.error(readFileSync(new URL(import.meta.url)).toString().split("\n").slice(1, 21).join("\n")); process.exit(1); }
 
 loadEnv();
 const ENV_LOCAL = path.join(ROOT, ".env.local");
@@ -96,3 +98,28 @@ let text = JSON.stringify(out, null, 2);
 if (flag("--redact")) text = text.replace(/nd_[a-z0-9]{8}_[A-Za-z0-9_-]{43}/g, "nd_********_<redacted>").replace(/(XAI_API_KEY|LINE_CHANNEL_SECRET|NOTIFY_[A-Z_]*URL)=[^\\\n]+/g, "$1=<redacted>");
 process.stdout.write(text + "\n");
 console.error(`routine.mjs: name=${name} mode=${mode} cron="${cron}" (UTC) model=${model} env=${envId} repo=${repo}${embedded.length ? ` embedded optional: ${embedded.join(",")}` : ""}`);
+
+// ── hosts: 実行環境の Network access 許可リストに入れるホスト ──
+// claude.ai の環境が egress 制限つきだと、ルーティンからコンソールや RSS に到達できない（ログに "Host not in allowlist"）。
+// ここが唯一 API から設定できない箇所なので、利用者に見せる一覧を作る。
+async function printHosts() {
+  loadEnv();
+  const hosts = new Set(["github.com", "api.github.com"]);
+  const url = process.env.NEWSDIGEST_API_URL || "";
+  if (url) hosts.add(new URL(url).host);
+  if (process.env.XAI_API_KEY) hosts.add("api.x.ai");
+  for (const k of ["NOTIFY_SLACK_WEBHOOK_URL", "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_WEBHOOK_URL"]) if (process.env[k]) try { hosts.add(new URL(process.env[k]).host); } catch { /* ignore */ }
+  if (process.env.LINE_CHANNEL_ID) hosts.add("api.line.me");
+  // ソースマスタから RSS / releases のホスト
+  if (url && process.env.NEWSDIGEST_API_KEY) {
+    try {
+      const r = await fetch(`${url.replace(/\/+$/, "")}/api/sources`, { headers: { Authorization: `Bearer ${process.env.NEWSDIGEST_API_KEY}` } });
+      if (r.ok) {
+        const doc = await r.json();
+        for (const s of [...(doc.sources?.rss ?? []), ...(doc.sources?.releases ?? [])]) if (s.status === "active") try { hosts.add(new URL(s.url).host); } catch { /* ignore */ }
+      } else console.error(`routine.mjs: /api/sources → HTTP ${r.status}（RSS ホストは取得できませんでした）`);
+    } catch (e) { console.error(`routine.mjs: /api/sources に到達できません: ${e.message}`); }
+  } else console.error("routine.mjs: NEWSDIGEST_API_URL / NEWSDIGEST_API_KEY が無いので RSS ホストは含みません");
+  console.log([...hosts].sort().join("\n"));
+  console.error(`routine.mjs: ${hosts.size} hosts。https://claude.ai/code/environments → 環境 → Network access の許可リストに追加する（制限なしなら不要）。RSS ソースを追加したら再実行して足す`);
+}

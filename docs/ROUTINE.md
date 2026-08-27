@@ -22,7 +22,17 @@ AI 実行は Claude Code Web版の **ルーティン**（https://claude.ai/code/
 
 `embed` の値は claude.ai のルーティン設定（編集画面・`RemoteTrigger get`）と実行ログに残る。自分だけのアカウントなら許容範囲だが、**共有アカウントや組織で運用するなら `env` を使う**（[AUTH.md](AUTH.md)）。
 
-`env` モードの登録先: https://claude.ai/code/environments → 環境（既定 Default）→ Environment variables に `NEWSDIGEST_API_URL` と `NEWSDIGEST_API_KEY`（= `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`）。同じ画面でネットワーク設定を確認（コンソールのホスト・`api.x.ai`・各 RSS ホスト）。
+`env` モードの登録先: https://claude.ai/code/environments → 環境（既定 Default）→ Environment variables に `NEWSDIGEST_API_URL` と `NEWSDIGEST_API_KEY`（= `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`）。
+
+## ネットワーク許可リスト（環境が egress 制限つきの場合）
+
+claude.ai の環境に Network access の制限があると、ルーティンはコンソールにも RSS にも届かず、ログに `Host not in allowlist: <host>` と出る。これはルーティン API から設定できない唯一の項目で、利用者が環境設定で許可する:
+
+```bash
+node scripts/routine.mjs hosts     # コンソール・GitHub・active な RSS/リリースのホスト・api.x.ai・通知先を列挙
+```
+
+https://claude.ai/code/environments → 環境 → **Network access** に一覧を追加（または「制限なし」）。RSS ソースを増やしたら再実行して足す。
 
 ## 作成
 
