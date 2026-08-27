@@ -4,11 +4,14 @@
 //
 //   node scripts/fetch-rss.mjs [--hours 24] [--limit 15] [--timeout 20] <url> [<url> ...]
 //   node scripts/fetch-rss.mjs --from-sources <sources.json>   # sources.rss + sources.releases の active を全部
+//   --via console|direct|auto   取得経路。auto（既定）= 直接取得し、ネットワーク制限などで失敗したらコンソールの GET /api/fetch に切り替える
+//                               （NEWSDIGEST_FETCH_VIA 環境変数でも指定可）。console 経由はソースマスタに登録済みの URL しか通らない
 //
 // 出力（stdout, JSON）:
-//   [{ "url": "...", "title": "<feed title>", "kind": "rss"|"release", "ok": true, "items": [{title,url,published}], "error"?: "..." }]
+//   [{ "url": "...", "title": "<feed title>", "kind": "rss"|"release", "ok": true, "items": [{title,url,published}], "error"?: "...", "via"?: "console" }]
 // 直近 --hours 時間の記事だけ残す（日付が取れないものは残す）。
 import { readFileSync } from "node:fs";
+import { loadEnv } from "./env.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, def) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : def; };
@@ -16,6 +19,10 @@ const hours = Number(opt("--hours", 24));
 const limit = Number(opt("--limit", 15));
 const timeoutMs = Number(opt("--timeout", 20)) * 1000;
 const fromSources = opt("--from-sources");
+loadEnv();
+const via = opt("--via", process.env.NEWSDIGEST_FETCH_VIA || "auto");
+const consoleBase = (process.env.NEWSDIGEST_API_URL || "").replace(/\/+$/, "");
+const consoleKey = process.env.NEWSDIGEST_API_KEY || "";
 
 let targets = [];
 if (fromSources) {
@@ -23,7 +30,7 @@ if (fromSources) {
   for (const r of doc.sources?.rss ?? []) if (r.status === "active") targets.push({ url: r.url, title: r.title, kind: "rss" });
   for (const r of doc.sources?.releases ?? []) if (r.status === "active") targets.push({ url: r.url, title: r.repo, kind: "release" });
 } else {
-  targets = args.filter((a, i) => !a.startsWith("--") && !["--hours", "--limit", "--timeout", "--from-sources"].includes(args[i - 1]))
+  targets = args.filter((a, i) => !a.startsWith("--") && !["--hours", "--limit", "--timeout", "--from-sources", "--via"].includes(args[i - 1]))
     .map((url) => ({ url, kind: /releases\.atom$/.test(url) ? "release" : "rss" }));
 }
 if (targets.length === 0) { console.error("no feed urls"); process.exit(1); }
@@ -64,7 +71,30 @@ const recent = (it) => {
   return Number.isNaN(t) ? true : t >= cutoff;
 };
 
+// コンソール経由（登録済みソースのみ）。実行環境の egress 制限で直接取れないときの経路
+async function fetchViaConsole(t, reason) {
+  if (!consoleBase || !consoleKey) return { ...t, ok: false, items: [], error: `${reason}; console fallback unavailable (NEWSDIGEST_API_URL/KEY missing)` };
+  try {
+    const u = `${consoleBase}/api/fetch?url=${encodeURIComponent(t.url)}&hours=${hours}&limit=${limit}`;
+    const res = await fetch(u, { headers: { Authorization: `Bearer ${consoleKey}` }, signal: AbortSignal.timeout(timeoutMs + 10_000) });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) return { ...t, ok: false, items: [], error: `${reason}; console: HTTP ${res.status} ${body?.error ?? ""}`.trim() };
+    return { ...t, ...body, title: t.title || body.title, kind: t.kind };
+  } catch (e) {
+    return { ...t, ok: false, items: [], error: `${reason}; console: ${e.message || e}` };
+  }
+}
+
+const looksLikeNetworkPolicy = (err) => /CONNECT tunnel|not in allowlist|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|fetch failed|403/i.test(err || "");
+
 async function fetchOne(t) {
+  if (via === "console") return fetchViaConsole(t, "via=console");
+  const r = await fetchDirect(t);
+  if (r.ok || via === "direct") return r;
+  return looksLikeNetworkPolicy(r.error) ? fetchViaConsole(t, `direct: ${r.error}`) : r;
+}
+
+async function fetchDirect(t) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -83,4 +113,6 @@ async function fetchOne(t) {
 
 const results = await Promise.all(targets.map(fetchOne));
 console.log(JSON.stringify(results, null, 2));
+const viaConsole = results.filter((r) => r.via === "console").length;
+if (viaConsole) console.error(`fetch-rss: ${viaConsole}/${results.length} feeds fetched via console (/api/fetch)`);
 if (results.every((r) => !r.ok)) process.exit(1);

@@ -29,9 +29,9 @@ description: NewsDigest の Claude Code ルーティン（Web版・クラウド�
    ```
 5. **環境 ID**: `RemoteTrigger {action:"list"}` の既存ルーティンの `job_config.ccr.environment_id` を使う（同じ利用者なら通常 1 つ）。既存ルーティンが無ければ内蔵スキル `/schedule` で環境一覧（`env_...`）を出して選ぶ。既定は "Default"。`--env-id` で渡すと `.env.local` の `NEWSDIGEST_ROUTINE_ENV_ID` に保存され、次回から省略できる
 6. 時刻とモデル（既定で進めてよい。変えるなら利用者に確認）: 07:15 JST = cron `15 22 * * *`（UTC、最小間隔 1 時間）、`claude-sonnet-5`（品質優先なら `claude-opus-5`）
-7. **ネットワーク**: claude.ai の環境が egress 制限つきだと、ルーティンはコンソールにも RSS にも到達できない（初回実行のログに `Host not in allowlist: <host>`）。これは API から設定できない唯一の項目。`node scripts/routine.mjs hosts` で許可が必要なホスト一覧を出し、初回実行が制限で失敗したら利用者に依頼する:
-   > https://claude.ai/code/environments → 使っている環境 → **Network access** で、次のホストを許可リストに追加してください（または「制限なし」にする）: `<hosts の出力>`
-   追加してもらったら `run` で再実行する。RSS ソースを増やしたときも同様
+7. **ネットワーク**: claude.ai の環境は既定で egress 制限つきで、そのままだとルーティンはコンソールに届かない（初回実行のログに `Host not in allowlist: <host>`）。これは API から設定できない唯一の項目。必要なのは **コンソールのホスト 1 つ**（RSS は `/api/fetch` 経由で取れる）。`node scripts/routine.mjs hosts` の出力を添えて、作成前に依頼しておく:
+   > https://claude.ai/code/environments → 使っている環境 → **Network access** に `<コンソールのホスト>` を追加してください（または「制限なし」）
+   未対応のまま初回実行が失敗したら、追加してもらってから `run` で再実行する。ソースを増やしても許可リストは変わらない
 8. `env` モードのときだけ: 環境変数 `NEWSDIGEST_API_URL` / `NEWSDIGEST_API_KEY`（= routine 鍵）が claude.ai の環境設定に登録済みか確認し、未登録なら登録を依頼して待つ（**ルーティンはローカルの `.env.local` を読めない**）
 
 ## 作成（create）
@@ -76,7 +76,7 @@ node scripts/routine.mjs body --env-id env_XXXX --redact   # 利用者に見せ�
 | 症状 | 原因 | 対処 |
 |---|---|---|
 | `missing env: NEWSDIGEST_API_URL` | `env` モードで環境変数未登録、または `embed` の `.env` 作成に失敗 | `env`: claude.ai の環境設定に登録 / `embed`: ログで `.env` 作成手順が実行されたか確認し、`update` でプロンプトを入れ直す |
-| health が到達不能 / `Host not in allowlist` / `CONNECT tunnel failed` | 環境のネットワーク制限 | `node scripts/routine.mjs hosts` の一覧を環境の Network access に追加、または制限なしにする |
+| health が到達不能 / `Host not in allowlist` / `CONNECT tunnel failed` | 環境のネットワーク制限 | 環境の Network access にコンソールのホスト（`node scripts/routine.mjs hosts`）を追加、または制限なしにする |
 | HTTP 401 | 鍵が失効・期限切れ・貼り間違い | `rotate` |
 | HTTP 403 `scope 'write' required` | read 鍵を使っている | `routine` 鍵（read,write）で `rotate` |
 | 「分析方針が未設定」で終了 | policy 未設定 | MCP `set_digest_policy` か `/newsdigest-setup` Phase 5 |

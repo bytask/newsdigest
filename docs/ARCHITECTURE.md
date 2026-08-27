@@ -10,7 +10,7 @@
 │  2. 認証情報: プロンプト埋め込み(embed, 既定) or 環境変数(env) → .env     │
 │  3. .claude/skills/newsdigest/SKILL.md を実行                   │
 │       GET /api/sources ──────────────────────────┐              │
-│       fetch-rss.mjs（RSS/Atom/releases.atom）      │              │
+│       fetch-rss.mjs（RSS/Atom/releases.atom。直接 or /api/fetch 経由）│              │
 │       xai-search（X アカウント / トレンド）          │              │
 │       要約・統合・Mermaid                          │              │
 │       POST /api/digests, POST /api/raw ───────────┤              │
@@ -24,7 +24,7 @@
 │  UI: /  /d/<name>  /raw  /raw/<date>  /sources  /about  /latest │
 │      /login  /settings（鍵の発行・失効、パスワード変更）           │
 │  API: /api/sources  /api/policy  /api/digests  /api/raw  /api/health  │
-│       /api/keys  /api/auth/*                                     │
+│       /api/keys  /api/auth/*  /api/fetch（登録済みフィードの取得）   │
 │  MCP: /mcp（Bearer）  /mcp/<read 鍵>（claude.ai コネクタ用）      │
 │  任意: /api/line/webhook（LINE トピック詳細返信）                 │
 └───────────────────────────────────────────────────────────────┘
@@ -41,7 +41,8 @@
 
 設計原則:
 
-- **コンソールは AI を呼ばない**。だから常駐も課金もなく、無料枠に収まる
+- **コンソールは AI を呼ばない**。だから常駐も課金もなく、無料枠に収まる。フィードの取得（`/api/fetch`）は行うが、これは I/O だけで LLM は使わない
+- **ルーティンの外部通信先はコンソール 1 ホスト**。claude.ai 環境の egress 制限に合わせ、RSS はコンソール経由で取れるようにしてある（X 収集・通知を使うときだけ増える）
 - **スキルが source of truth**。ルーティンもローカル手動実行も同じ `.claude/skills/` を読む。手順の改善は git push だけで次回実行から反映される
 - **ルーティンはステートレス**。毎回クリーンなサンドボックスで checkout → 実行 → 終了。状態はすべて D1 側
 - **ソースと分析方針は利用者が設定**。リポジトリは既定値を持たない（空で出荷）。設定は MCP（Claude Code / claude.ai）か REST

@@ -109,7 +109,7 @@ Claude Code で:
 
 `node scripts/routine.mjs body` が `routine/routine.template.json` と `routine/newsdigest.prompt.md` から作成 body を組み立て、内蔵のルーティン API ツール（`RemoteTrigger`）で日次ルーティンを作成する。既定の **`embed` モード**では `routine` 鍵（read,write）とコンソール URL をプロンプトに埋め込むので、claude.ai 側で環境変数を登録する必要は無い。作成後そのまま初回を手動実行し、ログとコンソールで結果を確認する。
 
-初回のログに `Host not in allowlist` が出たら、環境のネットワークが制限つき。`node scripts/routine.mjs hosts` が出すホストを https://claude.ai/code/environments → 環境 → Network access に追加（または制限なしに）して再実行する（[ROUTINE.md](ROUTINE.md)）。
+**ネットワーク（1 回だけ）**: claude.ai の環境は既定で egress 制限つきなので、https://claude.ai/code/environments → 環境（Default）→ **Network access** に **自分のコンソールのホスト**（`https://<worker>.workers.dev` のホスト部。`node scripts/routine.mjs hosts` でも出る）を追加するか、「制限なし」にする。RSS はコンソール経由で取れるので、RSS のホストを列挙する必要は無い（[ROUTINE.md](ROUTINE.md)）。
 
 鍵をルーティン設定に残したくない場合は `env` モード: https://claude.ai/code/environments の環境（既定 Default）→ Environment variables に `NEWSDIGEST_API_URL` と `NEWSDIGEST_API_KEY`（= `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`）を自分で登録し、`/newsdigest-routine` に「環境変数方式で」と伝える。2 方式の比較は [ROUTINE.md](ROUTINE.md)。
 

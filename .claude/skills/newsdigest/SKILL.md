@@ -53,7 +53,7 @@ node scripts/post.mjs policy  > .work/policy.md      # 未設定なら exit 3
 ```bash
 node scripts/fetch-rss.mjs --from-sources .work/sources.json --hours 24 > .work/rss.json
 ```
-`ok: false` のフィードは失敗として記録し続行。**新リリースがあれば必ずダイジェストのトピックに含める**（利用者が明示的に監視対象にしたものだから）。
+`ok: false` のフィードは失敗として記録し続行。直接取得が実行環境のネットワーク制限で失敗した場合は、`fetch-rss.mjs` が自動でコンソールの `GET /api/fetch` 経由に切り替える（結果の `via: "console"`）。**新リリースがあれば必ずダイジェストのトピックに含める**（利用者が明示的に監視対象にしたものだから）。
 
 **X アカウント**（`XAI_API_KEY` がある場合のみ。active な handle をまとめて 1 回、10 件を超えるなら分割）:
 ```bash

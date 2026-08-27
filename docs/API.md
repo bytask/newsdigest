@@ -87,6 +87,15 @@ API キーはスコープ付き（[AUTH.md](AUTH.md)）。各エンドポイン�
 
 `name` の規則: `^([\w-]+/)?[\w-]+$`。`reviews/` は `kind=review`、それ以外の名前空間は `kind=digest` だが一覧（トップページ）には出ない（拡張用）。
 
+## フィード取得（コンソール経由）
+
+`GET /api/fetch?url=<feed>&hours=24&limit=15` [read] — ソースマスタに **登録済み**の RSS / releases.atom を Worker が取得してパースする（未登録 URL は 403。オープンプロキシにしない）。ルーティンの実行環境が egress 制限つきのとき、`scripts/fetch-rss.mjs` が自動でここに切り替える。1 リクエスト = 1 フィード。
+
+```json
+{ "url": "https://blog.cloudflare.com/rss/", "title": "Cloudflare Blog", "kind": "rss", "ok": true,
+  "items": [{ "title": "…", "url": "https://…", "published": "…" }], "total": 20, "via": "console" }
+```
+
 ## 生データ
 
 `GET /api/raw` [read] — 日付一覧 `[{ "date": "2026-08-26", "count": 84 }]`

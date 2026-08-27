@@ -24,15 +24,19 @@ AI 実行は Claude Code Web版の **ルーティン**（https://claude.ai/code/
 
 `env` モードの登録先: https://claude.ai/code/environments → 環境（既定 Default）→ Environment variables に `NEWSDIGEST_API_URL` と `NEWSDIGEST_API_KEY`（= `.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`）。
 
-## ネットワーク許可リスト（環境が egress 制限つきの場合）
+## ネットワーク（環境の Network access）
 
-claude.ai の環境に Network access の制限があると、ルーティンはコンソールにも RSS にも届かず、ログに `Host not in allowlist: <host>` と出る。これはルーティン API から設定できない唯一の項目で、利用者が環境設定で許可する:
+claude.ai の環境は既定で egress が **制限つき**（パッケージレジストリなど以外は不可）。制限のある環境でルーティンを動かすと、ログに `Host not in allowlist: <host>` と出て止まる。ルーティン API からは設定できない唯一の項目なので、利用者が環境設定で許可する。
+
+必要なホストは **コンソール 1 つ**だけ:
 
 ```bash
-node scripts/routine.mjs hosts     # コンソール・GitHub・active な RSS/リリースのホスト・api.x.ai・通知先を列挙
+node scripts/routine.mjs hosts     # → <worker>.workers.dev（X 収集・通知・DIGEST_COMMIT_LOGS を使う場合だけ増える）
 ```
 
-https://claude.ai/code/environments → 環境 → **Network access** に一覧を追加（または「制限なし」）。RSS ソースを増やしたら再実行して足す。
+https://claude.ai/code/environments → 環境（既定 Default）→ **Network access** → カスタムでそのホストを追加（または「制限なし」）。
+
+RSS / リリースのホストを列挙する必要は無い。`scripts/fetch-rss.mjs` は直接取得がネットワーク制限で失敗すると、自動でコンソールの `GET /api/fetch`（登録済みソースの URL だけを取得するプロキシ）に切り替える。ソースを増やしても許可リストは変わらない。
 
 ## 作成
 
@@ -66,7 +70,7 @@ https://claude.ai/code/environments → 環境 → **Network access** に一覧�
 | 症状 | 原因 | 対処 |
 |---|---|---|
 | ログに `missing env: NEWSDIGEST_API_URL` | `env` モードで環境変数未登録 / `embed` で `.env` 作成が飛ばされた | `env`: Environment variables に登録 / `embed`: `update` でプロンプトを入れ直し、ログで手順 0 の実行を確認 |
-| `health` が到達不能 / `fetch failed` | サンドボックスのネットワーク制限 | 環境設定でコンソールのホスト・`api.x.ai`・RSS ホストを許可（または制限なし） |
+| `health` が到達不能 / `Host not in allowlist` / `CONNECT tunnel failed` | 環境のネットワーク制限 | 環境の Network access にコンソールのホスト（`node scripts/routine.mjs hosts`）を追加、または制限なしにする |
 | `HTTP 401` | 鍵が無効（失効・期限切れ・貼り間違い） | Settings で `routine` 鍵を再発行し、環境変数 `NEWSDIGEST_API_KEY` を差し替える |
 | `HTTP 403 scope 'write' required` | 鍵のスコープ不足（read 鍵を貼っている等） | ルーティンには `read,write` の鍵を使う（`.env.local` の `NEWSDIGEST_ROUTINE_API_KEY`） |
 | `list_runs` が空 | 発火前に弾かれた（環境未検出・リポジトリ権限・一時停止） | `get` で `enabled` / `next_run_at`、GitHub 連携で fork にアクセスできるか確認 |

@@ -5,7 +5,7 @@
 //   node scripts/routine.mjs body [options]        create 用 body（JSON）を stdout に
 //   node scripts/routine.mjs body --job-config-only  update 用（job_config だけ）
 //   node scripts/routine.mjs body --redact          鍵を伏せて表示（利用者に見せる用）
-//   node scripts/routine.mjs hosts                  ルーティンの実行環境で許可が必要なホスト一覧（コンソール・RSS・GitHub・api.x.ai）
+//   node scripts/routine.mjs hosts                  ルーティンの実行環境（claude.ai 環境の Network access）で許可が必要なホスト。基本はコンソール 1 つ
 //
 // options:
 //   --mode embed|env     embed（既定）: 認証情報をプロンプトに埋め込み、ルーティンが .env を作って動く（ゼロタッチ）
@@ -100,26 +100,19 @@ process.stdout.write(text + "\n");
 console.error(`routine.mjs: name=${name} mode=${mode} cron="${cron}" (UTC) model=${model} env=${envId} repo=${repo}${embedded.length ? ` embedded optional: ${embedded.join(",")}` : ""}`);
 
 // ── hosts: 実行環境の Network access 許可リストに入れるホスト ──
-// claude.ai の環境が egress 制限つきだと、ルーティンからコンソールや RSS に到達できない（ログに "Host not in allowlist"）。
-// ここが唯一 API から設定できない箇所なので、利用者に見せる一覧を作る。
+// claude.ai の環境が egress 制限つきだと、ルーティンは外に出られない（ログに "Host not in allowlist"）。
+// RSS / リリースはコンソールの GET /api/fetch 経由で取れる（fetch-rss.mjs が自動フォールバック）ので、必要なのは基本 **コンソール 1 ホスト**。
+// X 収集（api.x.ai）・通知先・DIGEST_COMMIT_LOGS の push（github.com）を使うときだけ増える。
 async function printHosts() {
   loadEnv();
-  const hosts = new Set(["github.com", "api.github.com"]);
+  const hosts = new Map();
   const url = process.env.NEWSDIGEST_API_URL || "";
-  if (url) hosts.add(new URL(url).host);
-  if (process.env.XAI_API_KEY) hosts.add("api.x.ai");
-  for (const k of ["NOTIFY_SLACK_WEBHOOK_URL", "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_WEBHOOK_URL"]) if (process.env[k]) try { hosts.add(new URL(process.env[k]).host); } catch { /* ignore */ }
-  if (process.env.LINE_CHANNEL_ID) hosts.add("api.line.me");
-  // ソースマスタから RSS / releases のホスト
-  if (url && process.env.NEWSDIGEST_API_KEY) {
-    try {
-      const r = await fetch(`${url.replace(/\/+$/, "")}/api/sources`, { headers: { Authorization: `Bearer ${process.env.NEWSDIGEST_API_KEY}` } });
-      if (r.ok) {
-        const doc = await r.json();
-        for (const s of [...(doc.sources?.rss ?? []), ...(doc.sources?.releases ?? [])]) if (s.status === "active") try { hosts.add(new URL(s.url).host); } catch { /* ignore */ }
-      } else console.error(`routine.mjs: /api/sources → HTTP ${r.status}（RSS ホストは取得できませんでした）`);
-    } catch (e) { console.error(`routine.mjs: /api/sources に到達できません: ${e.message}`); }
-  } else console.error("routine.mjs: NEWSDIGEST_API_URL / NEWSDIGEST_API_KEY が無いので RSS ホストは含みません");
-  console.log([...hosts].sort().join("\n"));
-  console.error(`routine.mjs: ${hosts.size} hosts。https://claude.ai/code/environments → 環境 → Network access の許可リストに追加する（制限なしなら不要）。RSS ソースを追加したら再実行して足す`);
+  if (url) hosts.set(new URL(url).host, "コンソール（必須。RSS もここ経由で取れる）");
+  if (process.env.XAI_API_KEY) hosts.set("api.x.ai", "X 収集（XAI_API_KEY あり）");
+  for (const k of ["NOTIFY_SLACK_WEBHOOK_URL", "NOTIFY_DISCORD_WEBHOOK_URL", "NOTIFY_WEBHOOK_URL"]) if (process.env[k]) try { hosts.set(new URL(process.env[k]).host, `通知（${k}）`); } catch { /* ignore */ }
+  if (process.env.LINE_CHANNEL_ID) hosts.set("api.line.me", "LINE 通知");
+  if (process.env.DIGEST_COMMIT_LOGS === "1") hosts.set("github.com", "digests/ の push（DIGEST_COMMIT_LOGS=1）");
+  if (!url) console.error("routine.mjs: NEWSDIGEST_API_URL が無い（先に npm run setup）");
+  for (const [h, why] of hosts) console.log(`${h}\t# ${why}`);
+  console.error(`routine.mjs: ${hosts.size} host(s)。https://claude.ai/code/environments → 環境 → Network access で許可する（「制限なし」なら不要）`);
 }
