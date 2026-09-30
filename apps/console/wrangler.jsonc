@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // Worker 名。公開URLは https://<name>.<your-subdomain>.workers.dev になる。
   // `npm run setup`（リポジトリ直下）が対話で書き換える。手動で変えてもよい。
-  "name": "newsdigest",
+  "name": "newsdigest-test",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -13,9 +13,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "newsdigest",
+      "database_name": "newsdigest-test",
       // `wrangler d1 create newsdigest` の出力で置き換える（setup が自動で行う）
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      "database_id": "009c6749-e7c6-4836-93b9-a8e20bc31761"
     }
   ],
   // 画面の表示名など（秘密でない設定）。secrets は `wrangler secret put <NAME>`:
@@ -24,7 +24,7 @@
   //   LINE_CHANNEL_ID/SECRET   … 任意。LINE公式アカウントの Webhook（トピック詳細返信）を使う場合
   // vars.PUBLIC_UI を "1" にすると閲覧 UI を認証なしで公開する（v0.1 の挙動）。/settings と /api/* は常に認証あり
   "vars": {
-    "APP_NAME": "NewsDigest",
+    "APP_NAME": "NewsDigest Test",
     "APP_TAGLINE": "ソースマスタ起点の日次インテリジェンス・ダイジェスト",
     "SCHEDULE_LABEL": "収集 07:15 JST・棚卸し 毎月1日"
   }
